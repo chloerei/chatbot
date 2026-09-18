@@ -9,8 +9,8 @@
 #   end
 
 if Rails.env.development?
-  user = User.find_or_initialize_by(email_address: "dev@example.com")
+  user = User.find_or_initialize_by(email: "dev@example.com")
   user.password = "12345678"
   user.save!
-  puts "Development user ready: #{user.email_address}"
+  puts "Development user ready: #{user.email}"
 end
