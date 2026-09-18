@@ -1,6 +1,12 @@
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.4.4
-FROM ghcr.io/rails/devcontainer/images/ruby:$RUBY_VERSION
+FROM ruby:4.0.7
+
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -y install --no-install-recommends \
+      libvips42 \
+      git \
+      nodejs \
+      npm
 
 # Ensure binding is always 0.0.0.0
 # Binds the server to all IP addresses of the container, so it can be accessed from outside the container.
