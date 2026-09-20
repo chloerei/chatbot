@@ -3,20 +3,11 @@
   <div class="drawer lg:drawer-open">
     <input id="chats-drawer" type="checkbox" class="drawer-toggle">
 
-    <div class="drawer-content flex min-h-screen flex-col bg-base-100">
-      <div class="navbar bg-base-200 lg:hidden">
-        <label for="chats-drawer" class="btn btn-square btn-ghost" aria-label="Open chat list">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-6 w-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </label>
-        <%= link_to "Chatbot", root_path, data: { turbo_frame: :chats_main }, class: "text-lg font-bold" %>
-      </div>
-
-      <main class="mx-auto w-full max-w-4xl flex-1 p-4">
+    <div class="drawer-content flex h-screen flex-col overflow-hidden bg-base-100">
+      <main class="flex min-h-0 w-full flex-1 flex-col">
         <%# Sidebar links target this frame, so only the main column is swapped.
             data-turbo-action keeps the address bar and history in sync. %>
-        <%= turbo_frame_tag :chats_main, data: { turbo_action: "advance" } do %>
+        <%= turbo_frame_tag :chats_main, data: { turbo_action: "advance" }, class: "flex min-h-0 flex-1 flex-col" do %>
           <%= yield %>
         <% end %>
       </main>

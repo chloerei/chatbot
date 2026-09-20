@@ -34,11 +34,17 @@ class ChatsController < ApplicationController
     @message = Message.new
   end
 
-  # The Chat model broadcasts the removal to the drawer's chat list, so the
-  # response is intentionally empty and leaves the page where it is.
+  # The Chat model broadcasts the removal to the drawer's chat list. Deleting
+  # from a chat page returns to a fresh chat, while deleting from the sidebar
+  # leaves the page where it is.
   def destroy
     @chat.destroy!
-    head :no_content
+
+    if params[:source] == "chat"
+      redirect_to root_path
+    else
+      head :no_content
+    end
   end
 
   private

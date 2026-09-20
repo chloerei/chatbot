@@ -64,14 +64,24 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
-  test "destroy" do
+  test "destroy from a chat page redirects to the new chat page" do
     chat = @user.chats.create!
 
     assert_difference -> { Chat.count }, -1 do
-      delete chat_path(chat)
+      delete chat_path(chat), params: { source: "chat" }
     end
 
-    # The removal is broadcast to the drawer's chat list; the response is empty.
+    assert_redirected_to root_path
+  end
+
+  test "destroy from the sidebar leaves the page in place" do
+    chat = @user.chats.create!
+
+    assert_difference -> { Chat.count }, -1 do
+      delete chat_path(chat), params: { source: "sidebar" }
+    end
+
+    # The removal is broadcast to the drawer's chat list, so the response is empty.
     assert_response :no_content
   end
 

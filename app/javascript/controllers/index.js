@@ -9,3 +9,6 @@ application.register("chats-list", ChatsListController)
 
 import HelloController from "./hello_controller"
 application.register("hello", HelloController)
+
+import InputResizeController from "./input_resize_controller"
+application.register("input-resize", InputResizeController)

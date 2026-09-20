@@ -17,8 +17,9 @@
     <ul tabindex="0" class="dropdown-content z-50 w-40 rounded-box bg-base-100 p-1 shadow-md">
       <li>
         <%= button_to "Delete", chat, method: :delete,
-              class: "w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm text-error hover:bg-error/10",
-              data: { turbo_confirm: "Delete this chat?" } %>
+              params: { source: "sidebar" },
+              data: { turbo_confirm: "Delete this chat?" },
+              class: "w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm text-error hover:bg-error/10" %>
       </li>
     </ul>
   </div>

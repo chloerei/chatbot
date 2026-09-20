@@ -1,23 +1,35 @@
-<%= form_with(model: message, url: [@chat, message], id: "new_message", class: "contents") do |form| %>
+<%# `contents` lets the error message and the composer sit directly in the chat
+    page's flex column, so the composer stays pinned below the message list. %>
+<%= form_with(model: message, url: [ chat, message ], id: "new_message", class: "contents") do |form| %>
   <% if message.errors.any? %>
-    <div id="error_explanation" class="bg-red-50 text-red-500 px-3 py-2 font-medium rounded-md mt-3">
-      <h2><%= pluralize(message.errors.count, "error") %> prohibited this message from being saved:</h2>
-
-      <ul class="list-disc ml-6">
-        <% message.errors.each do |error| %>
-          <li><%= error.full_message %></li>
+    <div id="error_explanation" class="bg-base-100">
+      <div class="mx-auto w-full max-w-3xl px-4 pt-2 text-sm text-error">
+        <% message.errors.full_messages.each do |full_message| %>
+          <p><%= full_message %></p>
         <% end %>
-      </ul>
+      </div>
     </div>
   <% end %>
 
-  <div class="my-5">
-    <%= form.label :content, "Message" %>
-    <%= form.text_area :content, rows: 4, placeholder: "Message...", autofocus: true,
-        class: ["block shadow-sm rounded-md border px-3 py-2 mt-2 w-full", {"border-gray-400 focus:outline-blue-600": message.errors[:content].none?, "border-red-400 focus:outline-red-600": message.errors[:content].any?}] %>
-  </div>
+  <div class="bg-base-100">
+    <div class="mx-auto w-full max-w-3xl px-4 py-3">
+      <%# Card that lifts with a primary-tinted shadow while the textarea is focused. %>
+      <div class="rounded-2xl border border-base-300 p-2 shadow-sm transition
+                  focus-within:border-primary focus-within:shadow-lg focus-within:shadow-primary/25">
+        <%= form.text_area :content, rows: 2, placeholder: "Message...", autofocus: true,
+            data: { controller: "input-resize", action: "input->input-resize#resize" },
+            class: "max-h-48 w-full resize-none border-0 bg-transparent px-2 py-1 leading-relaxed focus:outline-none focus:ring-0" %>
 
-  <div class="inline">
-    <%= form.submit "Send message", class: "w-full sm:w-auto rounded-md px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white inline-block font-medium cursor-pointer" %>
+        <%# Actions share a row so further buttons can be added alongside send. %>
+        <div class="flex items-center justify-end gap-2 px-1 pt-1">
+          <%= form.button type: :submit, aria: { label: "Send message" },
+              class: "btn btn-circle btn-primary btn-sm" do %>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19.5V4.5m0 0-7.5 7.5M12 4.5l7.5 7.5" />
+            </svg>
+          <% end %>
+        </div>
+      </div>
+    </div>
   </div>
 <% end %>
