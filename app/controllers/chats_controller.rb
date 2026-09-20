@@ -1,10 +1,13 @@
 class ChatsController < ApplicationController
   layout "chats"
 
-  before_action :load_chats
   before_action :set_chat, only: [ :show, :destroy ]
 
+  # Feeds the drawer's :chats_sidebar turbo frame, so it never renders the layout.
   def index
+    @chats = Current.user.chats.order(created_at: :desc)
+
+    render layout: false
   end
 
   def new

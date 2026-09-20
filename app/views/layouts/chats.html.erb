@@ -38,21 +38,11 @@
           <% end %>
         </div>
 
-        <div class="flex-1 overflow-y-auto px-2 pb-4">
-          <ul id="chats-sidebar" class="menu w-full gap-1">
-            <% if @chats.blank? %>
-              <li class="menu-title">No chats yet</li>
-            <% else %>
-              <% @chats.each do |chat| %>
-                <% title = chat.messages.first&.content.presence || "Chat ##{chat.id}" %>
-                <li>
-                  <%= link_to chat, class: ["truncate", { "menu-active": current_page?(chat) }] do %>
-                    <span class="truncate"><%= truncate(title, length: 32) %></span>
-                  <% end %>
-                </li>
-              <% end %>
-            <% end %>
-          </ul>
+        <div id="chats-list" class="px-4 pb-2" data-turbo-permanent>
+          <%= turbo_frame_tag :chats_sidebar, src: chats_path, loading: :lazy, target: "_top",
+                class: "flex-1 overflow-y-auto px-2 pb-4" do %>
+            <p class="px-3 py-2 text-sm opacity-50">Loading chats…</p>
+          <% end %>
         </div>
       </aside>
     </div>

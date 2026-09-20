@@ -1,7 +1,6 @@
 class MessagesController < ApplicationController
   layout "chats"
 
-  before_action :load_chats
   before_action :set_chat
 
   def create
