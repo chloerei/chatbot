@@ -4,12 +4,13 @@
   <% if @chats.blank? %>
     <p class="px-3 py-2 text-sm opacity-50">No chats yet</p>
   <% else %>
-    <ul class="space-y-1">
+    <ul class="space-y-1" data-controller="chats-list" data-chats-list-current-class="text-primary bg-primary/10">
       <% @chats.each do |chat| %>
-        <li class="group flex items-center gap-1 rounded-lg hover:bg-base-300">
+        <li class="group flex items-center gap-1 rounded-lg hover:bg-base-300"
+            data-chats-list-target="item" data-chat-id="<%= chat.id %>">
           <%= link_to chat,
-                class: ["min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-sm",
-                        { "font-semibold": current_page?(chat) }] do %>
+                data: { turbo_frame: :chats_main },
+                class: "min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-sm" do %>
             <span class="truncate"><%= truncate(chat.title, length: 32) %></span>
           <% end %>
 
