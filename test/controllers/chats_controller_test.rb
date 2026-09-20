@@ -15,7 +15,7 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "new" do
-    get new_chat_path
+    get root_path
 
     assert_response :success
   end

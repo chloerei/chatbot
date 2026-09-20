@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  resources :chats do
+  resources :chats, only: [ :index, :create, :show, :destroy ] do
     resources :messages, only: [ :create ]
   end
   resource :session
@@ -15,5 +15,5 @@ Rails.application.routes.draw do
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
   # Defines the root path route ("/")
-  root "home#index"
+  root "chats#new"
 end
