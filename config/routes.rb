@@ -1,4 +1,12 @@
 Rails.application.routes.draw do
+  resources :chats do
+    resources :messages, only: [ :create ]
+  end
+  resources :models, only: [ :index, :show ], constraints: { id: /[^\/]+/ } do
+    collection do
+      post :refresh
+    end
+  end
   resource :session
   resources :passwords, param: :token
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
