@@ -34,9 +34,11 @@ class ChatsController < ApplicationController
     @message = Message.new
   end
 
+  # The Chat model broadcasts the removal to the drawer's chat list, so the
+  # response is intentionally empty and leaves the page where it is.
   def destroy
     @chat.destroy!
-    redirect_to chats_path, notice: "Chat was successfully destroyed.", status: :see_other
+    head :no_content
   end
 
   private

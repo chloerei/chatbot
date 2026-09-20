@@ -1,0 +1,25 @@
+<li id="<%= dom_id(chat) %>" class="group flex items-center gap-1 rounded-lg hover:bg-base-300"
+    data-chats-list-target="item" data-chat-id="<%= chat.id %>">
+  <%= link_to chat,
+        data: { turbo_frame: :chats_main },
+        class: "min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-sm" do %>
+    <span class="truncate"><%= truncate(chat.title, length: 32) %></span>
+  <% end %>
+
+  <div class="dropdown dropdown-end pr-1">
+    <div tabindex="0" role="button" aria-label="Chat actions"
+         class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm6 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm6 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+      </svg>
+    </div>
+
+    <ul tabindex="0" class="dropdown-content z-50 w-40 rounded-box bg-base-100 p-1 shadow-md">
+      <li>
+        <%= button_to "Delete", chat, method: :delete,
+              class: "w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm text-error hover:bg-error/10",
+              data: { turbo_confirm: "Delete this chat?" } %>
+      </li>
+    </ul>
+  </div>
+</li>

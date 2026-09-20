@@ -71,7 +71,8 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
       delete chat_path(chat)
     end
 
-    assert_redirected_to chats_path
+    # The removal is broadcast to the drawer's chat list; the response is empty.
+    assert_response :no_content
   end
 
   test "destroy does not destroy another user's chat" do
