@@ -1,11 +1,42 @@
-<%= tag.div(flash[:alert], style: "color:red") if flash[:alert] %>
-<%= tag.div(flash[:notice], style: "color:green") if flash[:notice] %>
+<% content_for :title, "Sign in" %>
 
-<%= form_with url: session_path do |form| %>
-  <%= form.email_field :email, required: true, autofocus: true, autocomplete: "username", placeholder: "Enter your email address", value: params[:email] %><br>
-  <%= form.password_field :password, required: true, autocomplete: "current-password", placeholder: "Enter your password", maxlength: 72 %><br>
-  <%= form.submit "Sign in" %>
-<% end %>
-<br>
+<div class="min-h-dvh flex items-center justify-center bg-base-200 px-4 py-10">
+  <div class="card w-full max-w-sm bg-base-100 shadow-xl">
+    <div class="card-body gap-5">
+      <div class="text-center">
+        <h1 class="card-title justify-center text-2xl">Sign in</h1>
+        <p class="text-sm text-base-content/60 mt-1">Enter your details to continue.</p>
+      </div>
 
-<%= link_to "Forgot password?", new_password_path %>
+      <% if flash[:alert] %>
+        <div role="alert" class="alert alert-error alert-soft">
+          <span><%= flash[:alert] %></span>
+        </div>
+      <% end %>
+
+      <% if flash[:notice] %>
+        <div role="alert" class="alert alert-success alert-soft">
+          <span><%= flash[:notice] %></span>
+        </div>
+      <% end %>
+
+      <%= form_with url: session_path, class: "flex flex-col gap-2" do |form| %>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Email</legend>
+          <%= form.email_field :email, required: true, autofocus: true, autocomplete: "username", value: params[:email], class: "input w-full" %>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Password</legend>
+          <%= form.password_field :password, required: true, autocomplete: "current-password", maxlength: 72, class: "input w-full" %>
+        </fieldset>
+
+        <%= form.submit "Sign in", class: "btn btn-primary w-full mt-2" %>
+      <% end %>
+
+      <div class="text-center text-sm">
+        <%= link_to "Forgot password?", new_password_path, class: "link link-primary" %>
+      </div>
+    </div>
+  </div>
+</div>
