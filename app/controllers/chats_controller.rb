@@ -13,7 +13,8 @@ class ChatsController < ApplicationController
     prompt = params.dig(:chat, :prompt)
     if prompt.present?
       @chat = Current.user.chats.create!
-      ChatResponseJob.perform_later(@chat.id, prompt)
+      @chat.ask_later(prompt)
+      ChatResponseJob.perform_later(@chat)
 
       redirect_to @chat, notice: "Chat was successfully created."
     else

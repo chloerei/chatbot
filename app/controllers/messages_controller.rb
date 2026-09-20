@@ -4,7 +4,8 @@ class MessagesController < ApplicationController
   def create
     content = params.dig(:message, :content)
     if content.present?
-      ChatResponseJob.perform_later(@chat.id, content)
+      @chat.ask_later(content)
+      ChatResponseJob.perform_later(@chat)
 
       respond_to do |format|
         format.turbo_stream
