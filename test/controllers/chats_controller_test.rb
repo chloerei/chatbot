@@ -56,6 +56,14 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "show does not expose another user's chat" do
+    other_chat = users(:two).chats.create!
+
+    get chat_path(other_chat)
+
+    assert_response :not_found
+  end
+
   test "destroy" do
     chat = @user.chats.create!
 
@@ -64,5 +72,15 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to chats_path
+  end
+
+  test "destroy does not destroy another user's chat" do
+    other_chat = users(:two).chats.create!
+
+    assert_no_difference -> { Chat.count } do
+      delete chat_path(other_chat)
+    end
+
+    assert_response :not_found
   end
 end

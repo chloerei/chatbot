@@ -1,4 +1,7 @@
 class MessagesController < ApplicationController
+  layout "chats"
+
+  before_action :load_chats
   before_action :set_chat
 
   def create
@@ -25,6 +28,6 @@ class MessagesController < ApplicationController
   private
 
   def set_chat
-    @chat = Chat.find(params[:chat_id])
+    @chat = Current.user.chats.find(params[:chat_id])
   end
 end

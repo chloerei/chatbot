@@ -49,6 +49,18 @@ class MessagesControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
   end
 
+  test "create does not allow posting to another user's chat" do
+    other_chat = users(:two).chats.create!
+
+    assert_no_difference -> { Message.count } do
+      assert_no_enqueued_jobs only: ChatResponseJob do
+        post chat_messages_path(other_chat), params: { message: { content: "Hi there" } }
+      end
+    end
+
+    assert_response :not_found
+  end
+
   private
     def messages
       Message.where(chat_id: @chat.id).order(:created_at)

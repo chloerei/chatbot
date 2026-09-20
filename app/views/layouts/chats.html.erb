@@ -1,0 +1,62 @@
+<%# Nested layout: inherits app/views/layouts/application.html.erb through :content. %>
+<% content_for :content do %>
+  <div class="drawer lg:drawer-open">
+    <input id="chats-drawer" type="checkbox" class="drawer-toggle">
+
+    <div class="drawer-content flex min-h-screen flex-col bg-base-100">
+      <div class="navbar bg-base-200 lg:hidden">
+        <label for="chats-drawer" class="btn btn-square btn-ghost" aria-label="Open chat list">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-6 w-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </label>
+        <span class="text-lg font-bold">Chatbot</span>
+      </div>
+
+      <main class="mx-auto w-full max-w-4xl flex-1 p-4">
+        <%= yield %>
+      </main>
+    </div>
+
+    <div class="drawer-side z-40">
+      <label for="chats-drawer" class="drawer-overlay" aria-label="Close chat list"></label>
+
+      <aside class="flex min-h-full w-80 flex-col bg-base-200 text-base-content">
+        <div class="flex items-center gap-2 p-4">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-8 w-8 text-primary">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3h6M3 15.75v-7.5A2.25 2.25 0 0 1 5.25 6h13.5A2.25 2.25 0 0 1 21 8.25v7.5a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15.75Z" />
+          </svg>
+          <span class="text-xl font-bold">Chatbot</span>
+        </div>
+
+        <div class="px-4 pb-2">
+          <%= link_to new_chat_path, class: "btn btn-primary w-full" do %>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New chat
+          <% end %>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-2 pb-4">
+          <ul id="chats-sidebar" class="menu w-full gap-1">
+            <% if @chats.blank? %>
+              <li class="menu-title">No chats yet</li>
+            <% else %>
+              <% @chats.each do |chat| %>
+                <% title = chat.messages.first&.content.presence || "Chat ##{chat.id}" %>
+                <li>
+                  <%= link_to chat, class: ["truncate", { "menu-active": current_page?(chat) }] do %>
+                    <span class="truncate"><%= truncate(title, length: 32) %></span>
+                  <% end %>
+                </li>
+              <% end %>
+            <% end %>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+<% end %>
+
+<%= render template: "layouts/application" %>

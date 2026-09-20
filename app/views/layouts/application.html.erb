@@ -24,6 +24,7 @@
   </head>
 
   <body>
-    <%= yield %>
+    <%# Nested layouts can fill :content; otherwise render the template directly. %>
+    <%= content_for?(:content) ? yield(:content) : yield %>
   </body>
 </html>
