@@ -7,8 +7,8 @@ import { application } from "./application"
 import ChatsListController from "./chats_list_controller"
 application.register("chats-list", ChatsListController)
 
+import ComposerController from "./composer_controller"
+application.register("composer", ComposerController)
+
 import HelloController from "./hello_controller"
 application.register("hello", HelloController)
-
-import InputResizeController from "./input_resize_controller"
-application.register("input-resize", InputResizeController)

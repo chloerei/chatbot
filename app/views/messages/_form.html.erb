@@ -19,7 +19,7 @@
       <div class="rounded-2xl border border-base-300 p-2 shadow-sm transition
                   focus-within:border-primary focus-within:shadow-lg focus-within:shadow-primary/25">
         <%= form.text_area :content, rows: 2, placeholder: "Message...", autofocus: true,
-            data: { controller: "input-resize", action: "input->input-resize#resize" },
+            data: { controller: "composer", action: "input->composer#resize keydown->composer#submit" },
             class: "max-h-48 w-full resize-none border-0 bg-transparent px-2 py-1 leading-relaxed focus:outline-none focus:ring-0" %>
 
         <%# Actions share a row so further buttons can be added alongside send. %>
