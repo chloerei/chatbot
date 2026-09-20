@@ -20,9 +20,9 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "create with a prompt starts a chat on the default model" do
+  test "create with a message starts a chat on the default model" do
     assert_difference -> { Chat.count }, 1 do
-      post chats_path, params: { chat: { prompt: "Hello there" } }
+      post chats_path, params: { message: { content: "Hello there" } }
     end
 
     chat = Chat.order(:created_at).last
@@ -38,10 +38,10 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to chat_path(chat)
   end
 
-  test "create without a prompt does not start a chat" do
+  test "create without a message does not start a chat" do
     assert_no_difference -> { Chat.count } do
       assert_no_enqueued_jobs only: ChatResponseJob do
-        post chats_path, params: { chat: { prompt: "" } }
+        post chats_path, params: { message: { content: "" } }
       end
     end
 

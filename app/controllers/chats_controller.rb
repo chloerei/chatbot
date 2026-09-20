@@ -11,20 +11,20 @@ class ChatsController < ApplicationController
   end
 
   def new
-    @chat = Chat.new
+    @message = Message.new
   end
 
   def create
-    prompt = params.dig(:chat, :prompt)
-    if prompt.present?
+    content = params.dig(:message, :content)
+    if content.present?
       @chat = Current.user.chats.create!
-      @chat.ask_later(prompt)
+      @chat.ask_later(content)
       ChatResponseJob.perform_later(@chat)
 
       redirect_to @chat, notice: "Chat was successfully created."
     else
-      @chat = Chat.new
-      @chat.errors.add(:prompt, "can't be blank")
+      @message = Message.new
+      @message.errors.add(:content, "can't be blank")
 
       render :new, status: :unprocessable_content
     end

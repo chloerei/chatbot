@@ -6,7 +6,7 @@
     message area, and the composer pinned at the bottom. Both the messages and
     the composer are centred inside a shared max width. %>
 <div class="flex min-h-0 flex-1 flex-col">
-  <header class="navbar gap-1 border-b border-base-300 bg-base-100">
+  <header class="navbar gap-1 bg-base-100">
     <%= render "chats/sidebar_toggle" %>
 
     <h1 class="min-w-0 flex-1 truncate px-1 font-semibold"><%= @chat.title %></h1>
@@ -45,5 +45,5 @@
     </div>
   </div>
 
-  <%= render "messages/form", chat: @chat, message: @message %>
+  <%= render "messages/form", message: @message, url: [ @chat, @message ] %>
 </div>

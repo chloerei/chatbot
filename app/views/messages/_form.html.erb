@@ -1,6 +1,8 @@
-<%# `contents` lets the error message and the composer sit directly in the chat
-    page's flex column, so the composer stays pinned below the message list. %>
-<%= form_with(model: message, url: [ chat, message ], id: "new_message", class: "contents") do |form| %>
+<%# locals: (message:, url:) %>
+<%# Shared composer. `contents` lets the error message and the card sit directly
+    in the surrounding flex column, so it stays pinned below the message list on
+    a chat page and centred on the new chat page. %>
+<%= form_with(model: message, url: url, id: "new_message", class: "contents") do |form| %>
   <% if message.errors.any? %>
     <div id="error_explanation" class="bg-base-100">
       <div class="mx-auto w-full max-w-3xl px-4 pt-2 text-sm text-error">
