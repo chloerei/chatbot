@@ -1,0 +1,1282 @@
+# frozen_string_literal: true
+
+require 'forwardable'
+require 'schematist'
+
+module RubyLLM
+  # An Agent is a reusable chat configuration defined as a class. Subclasses
+  # declare a model, instructions, tools, and other settings once, then build
+  # configured chats wherever they are needed.
+  #
+  #   class SupportAgent < RubyLLM::Agent
+  #     model "gpt-5.6-luna"
+  #     instructions "You are a concise support assistant."
+  #     tools SearchDocs, LookupAccount
+  #   end
+  #
+  #   SupportAgent.new.ask "How do I reset my API key?"
+  #
+  # ::chat returns a configured Chat. When ::chat_model names an ActiveRecord
+  # chat class, ::create, ::create!, and ::find return configured records of
+  # that class instead.
+  #
+  # Configuration that depends on runtime state goes in blocks or lambdas.
+  # They are evaluated when a chat is built, with +chat+ and any declared
+  # ::inputs available as methods:
+  #
+  #   class WorkAssistant < RubyLLM::Agent
+  #     inputs :workspace
+  #
+  #     instructions { "You are helping #{workspace.name}" }
+  #   end
+  #
+  #   WorkAssistant.chat(workspace: workspace)
+  #
+  # Agent instances delegate Chat's conversation API (#ask, #complete,
+  # #with_tools, and so on) to the wrapped chat, which is available via
+  # #chat. Direct transcript replacement stays on the wrapped chat because
+  # Rails-backed chat models own their message association. Agents are
+  # enumerable over their messages.
+  class Agent
+    extend Forwardable
+    include Enumerable
+
+    DUPED_INHERITED_CONFIG = {
+      :@chat_kwargs => {},
+      :@tools => [],
+      :@provider_tools => [],
+      :@tool_options => {},
+      :@caching => nil,
+      :@compaction => nil,
+      :@provider_options => {},
+      :@headers => {},
+      :@input_names => [],
+      :@fallbacks => [],
+      :@fallback_options => {},
+      :@rescue_handlers => []
+    }.freeze
+    # Simple value options: a class-level getter/setter macro whose value the
+    # agent forwards to the matching Chat#with_* when it builds its chat.
+    PASSTHROUGH_OPTIONS = %i[temperature max_output_tokens].freeze
+    THINKING_OPTIONS = %i[effort budget display].freeze
+
+    # The chat operations an agent instance runs through its ::rescue_from
+    # handlers. Remaining delegated methods pass through untouched.
+    GUARDED_OPERATIONS = %i[ask say ask_later complete generate run_tools step count_tokens compact].freeze
+
+    # Chat methods that return the wrapped chat so calls can be chained there.
+    CHAINABLE_CHAT_DELEGATES = %i[
+      with_instructions with_tools with_provider_tools with_tool_options with_model
+      with_temperature with_max_output_tokens with_thinking with_citations
+      with_end_user with_compaction with_caching with_context with_provider_options
+      with_headers with_schema with_fallbacks
+      before_request before_message after_message before_tool_call after_tool_result
+      before_fallback after_fallback
+      cancel approve deny cache_until_here
+    ].freeze
+
+    # Chat values and operations whose return values pass through unchanged.
+    PASSTHROUGH_CHAT_DELEGATES = %i[
+      model provider messages tools provider_tools tool_options provider_options headers schema concurrency
+      caching citations compaction context end_user fallbacks thinking temperature max_output_tokens
+      each complete? cancelled? awaiting_approval? pending_approvals
+      add_message add_completion tokens cost render
+    ].freeze
+
+    COPIED_INHERITED_CONFIG = (%i[
+      @thinking
+      @citations
+      @end_user
+      @schema
+      @context
+      @chat_model
+    ] + PASSTHROUGH_OPTIONS.map { |option| :"@#{option}" }).freeze
+    private_constant :DUPED_INHERITED_CONFIG, :COPIED_INHERITED_CONFIG,
+                     :PASSTHROUGH_OPTIONS, :THINKING_OPTIONS, :GUARDED_OPERATIONS,
+                     :CHAINABLE_CHAT_DELEGATES, :PASSTHROUGH_CHAT_DELEGATES
+
+    class << self
+      def inherited(subclass) # :nodoc:
+        super
+        copy_inherited_config_to(subclass)
+      end
+
+      # Sets the model used by chats this agent builds. Extra +options+ are
+      # forwarded to RubyLLM.chat, including +provider:+ to disambiguate the
+      # model and +protocol:+ to override its wire protocol. A block picks
+      # the model when the chat is built, with the declared ::inputs
+      # available as methods. Called with no arguments, returns the
+      # configured chat keywords.
+      #
+      #   model "gpt-5.6-luna"
+      #   model "gpt-5.6", provider: :openai, protocol: :responses
+      #   model { quality == :high ? "gpt-5.6" : "gpt-5.6-luna" }
+      #
+      # The block runs before the chat exists, so it can read inputs but not
+      # +chat+.
+      def model(model_id = nil, **options, &block)
+        return @chat_kwargs || {} if model_id.nil? && options.empty? && !block_given?
+
+        model_value = block || model_id
+        options[:model] = model_value unless model_value.nil?
+        @chat_kwargs = options
+      end
+
+      # Declares the tools for chats this agent builds. A block defers
+      # construction until the chat is built. Configure how the model uses
+      # them with ::tool_options. Called with no arguments, returns the
+      # declared tools.
+      #
+      #   tools SearchDocs, LookupAccount
+      #   tools { [TodoTool.new(chat: chat)] }
+      #
+      def tools(*tools, &block)
+        return @tools || [] if tools.empty? && !block_given?
+
+        @tools = block_given? ? block : tools.flatten
+      end
+
+      # Sets how chats this agent builds use their tools, applied via
+      # Chat#with_tool_options. Accepts +choice:+, +calls:+, and
+      # +concurrency:+. A block defers evaluation until the chat is built.
+      # Called with no arguments, returns the configured options.
+      #
+      #   tool_options choice: :required, calls: :one
+      #
+      def tool_options(**options, &block)
+        return @tool_options || {} if options.empty? && !block_given?
+
+        @tool_options = block_given? ? block : options
+      end
+
+      # Enables provider-executed tools for chats this agent builds, applied
+      # via Chat#with_provider_tools. Accepts the same aliases, options, and
+      # raw Hashes; a block defers evaluation until the chat is built.
+      # Called with no arguments, returns the declared entries.
+      #
+      #   provider_tools :web_search
+      #   provider_tools web_search: { allowed_domains: ["ruby-lang.org"] }
+      #
+      def provider_tools(*tools, **tools_with_options, &block)
+        return @provider_tools || [] if tools.empty? && tools_with_options.empty? && !block_given?
+
+        @provider_tools = block_given? ? block : RubyLLM::Tools::ProviderTools.normalize(tools, tools_with_options)
+      end
+
+      # Adds system instructions for chats this agent builds. Accepts a string,
+      # a block evaluated when the chat is built, or keyword locals for the
+      # agent's conventional prompt template (for a WorkAssistant agent,
+      # <tt>app/prompts/work_assistant/instructions.txt.erb</tt>). Multiple
+      # declarations are applied in order.
+      #
+      #   instructions "You are a helpful assistant."
+      #   instructions { "You are helping #{workspace.name}" }
+      #   instructions display_name: -> { chat.user.display_name_or_email }
+      #   instructions append: true, persist: false do
+      #     "Today is #{Date.current}"
+      #   end
+      #
+      # The class's own declarations take precedence over its conventional
+      # template. Inherited declarations are used only when neither exists.
+      # In Rails mode, declarations persist when the record is created unless
+      # <tt>persist: false</tt>;
+      # ::find always reapplies them without rewriting history. Called with no
+      # arguments, returns the declarations.
+      def instructions(text = nil, append: false, persist: true, cache_until_here: false, **prompt_locals, &block)
+        return instruction_declarations if text.nil? && prompt_locals.empty? && !block_given?
+
+        (@instruction_declarations ||= []) << {
+          value: block || text || { prompt: 'instructions', locals: prompt_locals },
+          append: append,
+          persist: persist,
+          cache_until_here: cache_until_here
+        }
+      end
+
+      ##
+      # :method: temperature
+      # :call-seq: temperature(value = nil)
+      #
+      # Sets the sampling temperature for chats this agent builds. Called
+      # with no argument, returns the configured value.
+      #
+      #   temperature 0.2
+
+      ##
+      # :method: max_output_tokens
+      # :call-seq: max_output_tokens(value = nil)
+      #
+      # Caps the number of tokens chats this agent builds may generate.
+      # Called with no argument, returns the configured value.
+      #
+      #   max_output_tokens 1000
+
+      PASSTHROUGH_OPTIONS.each do |option|
+        define_method(option) do |value = nil|
+          return instance_variable_get(:"@#{option}") if value.nil?
+
+          instance_variable_set(:"@#{option}", value)
+        end
+      end
+
+      # Enables thinking for chats this agent builds, applied via
+      # Chat#with_thinking. With no options, RubyLLM chooses from the model's
+      # registered controls. Accepts keywords or an options Hash. Pass +false+
+      # to disable it. Passing +nil+ raises ArgumentError.
+      #
+      #   thinking
+      #   thinking false
+      #   thinking effort: :low
+      #   thinking budget: 10_000
+      #   thinking display: :summarized
+      #
+      def thinking(enabled = true, **options) # rubocop:disable Style/OptionalBooleanParameter
+        return thinking(**enabled.transform_keys(&:to_sym), **options) if enabled.is_a?(Hash)
+
+        validate_thinking_options(enabled, options)
+        @thinking = enabled ? options : false
+      end
+
+      # Enables context compaction for chats this agent builds, applied via
+      # Chat#with_compaction. With no options, the provider's own defaults
+      # apply. Pass +false+ to disable it.
+      #
+      #   compaction
+      #   compaction false
+      #   compaction at: 50_000
+      #
+      def compaction(options = {})
+        options = {} if options == true
+        unless options == false || options.is_a?(Hash)
+          raise ArgumentError, 'compaction accepts true, false, or compaction options'
+        end
+
+        @compaction = options
+      end
+
+      # Sets the safety identifier for chats this agent builds, applied via
+      # Chat#with_end_user. A block defers evaluation until the
+      # chat is built, so the id can come from the agent's inputs. Called
+      # with no arguments, returns the configured value.
+      #
+      #   end_user "tenant-42"
+      #   end_user { workspace.public_id }
+      #
+      def end_user(value = nil, &block)
+        return @end_user if value.nil? && !block_given?
+
+        @end_user = block || value
+      end
+
+      # Enables citations for chats this agent builds, applied via
+      # Chat#with_citations. Pass +false+ to disable them.
+      #
+      #   citations
+      #   citations false
+      #
+      def citations(value = true) # rubocop:disable Style/OptionalBooleanParameter
+        raise ArgumentError, 'citations accepts true or false' unless [true, false].include?(value)
+
+        @citations = value
+      end
+
+      # Enables prompt caching for chats this agent builds, applied via
+      # Chat#with_caching. With no options, the provider's default behavior
+      # applies. Pass +false+ to stop RubyLLM from sending cache controls. A
+      # provider may still cache prompts implicitly. A block defers evaluation
+      # until the chat is built. Accepts keywords or an options Hash.
+      #
+      #   caching
+      #   caching false
+      #   caching ttl: "1h"
+      #   caching { { ttl: workspace.cache_ttl } }
+      #
+      def caching(enabled = true, **options, &block) # rubocop:disable Metrics/PerceivedComplexity, Style/OptionalBooleanParameter
+        return caching(**enabled.transform_keys(&:to_sym), **options, &block) if enabled.is_a?(Hash)
+
+        raise ArgumentError, 'caching accepts false or caching options' unless [true, false].include?(enabled)
+        raise ArgumentError, 'caching accepts options or a block, not both' if options.any? && block
+        raise ArgumentError, 'caching false does not accept options or a block' if !enabled && (options.any? || block)
+
+        @caching = block || (enabled ? options : false)
+      end
+
+      # Sets options in the provider's request vocabulary for chats this
+      # agent builds, applied via Chat#with_provider_options. A block
+      # defers evaluation until the chat is built. Called with no
+      # arguments, returns the configured value.
+      #
+      #   provider_options service_tier: "flex"
+      #
+      def provider_options(**provider_options, &block)
+        return @provider_options || {} if provider_options.empty? && !block_given?
+
+        @provider_options = block_given? ? block : provider_options
+      end
+
+      # Sets custom HTTP headers for chats this agent builds, applied via
+      # Chat#with_headers. A block defers evaluation until the chat is
+      # built. Called with no arguments, returns the configured value.
+      def headers(**headers, &block)
+        return @headers || {} if headers.empty? && !block_given?
+
+        @headers = block_given? ? block : headers
+      end
+
+      # Sets the structured output schema for chats this agent builds,
+      # applied via Chat#with_schema. Accepts a schema class, a JSON schema
+      # hash, or a block. A plain block is built with the Schematist::Schema
+      # DSL; a lambda is evaluated when the chat is built. Called with no
+      # arguments, returns the configured value.
+      #
+      #   schema PersonSchema
+      #   schema do
+      #     string :verdict, enum: ["pass", "revise"]
+      #     string :feedback
+      #   end
+      #
+      def schema(value = nil, &block)
+        return @schema if value.nil? && !block_given?
+
+        @schema = block_given? ? block : value
+      end
+
+      # Sets fallback models for chats this agent builds, applied via
+      # Chat#with_fallbacks. Called with no arguments, returns the
+      # configured models.
+      #
+      #   fallbacks "gpt-4.1-mini", "claude-haiku-4-5"
+      #   fallbacks "gpt-4.1-mini", on: [RubyLLM::RateLimitError]
+      #
+      def fallbacks(*models, **options)
+        return @fallbacks || [] if models.empty? && options.empty?
+        raise ArgumentError, 'To set fallback options, provide at least one fallback model' if models.empty?
+
+        @fallbacks = models.flatten.compact
+        @fallback_options = options
+      end
+
+      def fallback_options
+        @fallback_options || {}
+      end
+
+      private :fallback_options
+
+      # Sets a Context whose configuration chats this agent builds should
+      # use, applied via Chat#with_context. Called with no argument, returns
+      # the configured context.
+      def context(value = nil)
+        return @context if value.nil?
+
+        @context = value
+      end
+
+      # Sets the ActiveRecord chat class this agent creates and finds,
+      # activating Rails mode (::create, ::create!, ::find, and
+      # ::sync_instructions). Accepts the class or its name as a string.
+      # Called with no argument, returns the configured value.
+      #
+      #   chat_model Chat
+      #
+      def chat_model(value = nil)
+        return @chat_model if value.nil?
+
+        @chat_model = value
+        remove_instance_variable(:@resolved_chat_model) if instance_variable_defined?(:@resolved_chat_model)
+      end
+
+      # Declares named runtime inputs. Matching keyword arguments passed to
+      # ::chat, ::create, ::create!, ::find, or ::new become methods inside
+      # lazy configuration blocks. Called with no arguments, returns the
+      # declared names.
+      #
+      #   inputs :workspace
+      #
+      def inputs(*names)
+        return @input_names || [] if names.empty?
+
+        @input_names = names.flatten.map(&:to_sym)
+      end
+
+      # Registers a handler for exceptions raised by the chat operations of
+      # this agent's instances: #ask, #say, #ask_later, #complete,
+      # #generate, #run_tools, #step, #count_tokens, and #compact. Name the
+      # handler with +with:+ or pass a block; either runs on the agent instance,
+      # so the agent's #chat, inputs, and class name are available for instrumentation.
+      #
+      #   class ApplicationAgent < RubyLLM::Agent
+      #     rescue_from RubyLLM::RateLimitError, Faraday::TimeoutError, with: :handle_transient
+      #     rescue_from RubyLLM::BadRequestError do |error|
+      #       error_tracker.notify(error)
+      #       raise
+      #     end
+      #
+      #     private
+      #
+      #     def handle_transient(error)
+      #       metrics.increment("llm.api_error", type: "transient")
+      #       raise
+      #     end
+      #   end
+      #
+      # Handlers are searched in reverse declaration order, so the last
+      # matching one wins. Re-raise inside a handler to let the caller see
+      # the exception; otherwise the handler's return value becomes the
+      # operation's return value. Exceptions no handler matches are
+      # re-raised. Subclasses inherit the handlers declared when they are
+      # defined.
+      #
+      # Exception classes may be named as Strings, which defers constant
+      # lookup until an exception is raised.
+      def rescue_from(*exception_classes, with: nil, &block)
+        raise ArgumentError, 'rescue_from needs a handler: pass with: or a block' unless with || block
+        raise ArgumentError, 'rescue_from takes with: or a block, not both' if with && block
+
+        exception_classes.flatten.each do |exception_class|
+          rescue_handlers << [rescue_handler_key(exception_class), with || block]
+        end
+      end
+
+      def rescue_handlers # :nodoc:
+        @rescue_handlers ||= []
+      end
+
+      def rescue_handler_for(exception) # :nodoc:
+        rescue_handlers.reverse_each do |class_name, handler|
+          exception_class = rescue_handler_class(class_name)
+          return handler if exception_class && exception.is_a?(exception_class)
+        end
+        nil
+      end
+
+      def chat_kwargs # :nodoc:
+        @chat_kwargs || {}
+      end
+
+      def resolved_chat_kwargs(inputs: {}) # :nodoc:
+        kwargs = chat_kwargs
+        return kwargs unless kwargs[:model].is_a?(Proc)
+
+        kwargs.merge(model: evaluate(kwargs[:model], runtime_context(chat: nil, inputs: inputs)))
+      end
+
+      def build_chat(inputs:, options:) # :nodoc:
+        (context || RubyLLM).chat(**resolved_chat_kwargs(inputs:), **options)
+      end
+
+      # Builds a Chat configured with this agent's declarations and returns
+      # it. Keywords matching declared ::inputs become runtime inputs; the
+      # rest are forwarded to RubyLLM.chat.
+      #
+      #   chat = WorkAssistant.chat
+      #   chat.ask "Hello"
+      #
+      def chat(**kwargs)
+        input_values, chat_options = partition_inputs(kwargs)
+        chat = build_chat(inputs: input_values, options: chat_options)
+        apply_configuration(chat, input_values:, persist_instructions: true)
+        chat
+      end
+
+      # Creates a ::chat_model record, applies this agent's configuration to
+      # it, and returns it. Keywords matching declared ::inputs become
+      # runtime inputs; the rest are forwarded to the model's +create+.
+      #
+      #   chat = WorkAssistant.create(user: current_user)
+      #
+      # Raises ArgumentError if ::chat_model is not configured.
+      def create(**kwargs)
+        with_rails_chat_record(:create, **kwargs)
+      end
+
+      # Like ::create, but calls the model's <tt>create!</tt>, raising if
+      # the record is invalid.
+      #
+      #   chat = WorkAssistant.create!(user: current_user)
+      #
+      def create!(**kwargs)
+        with_rails_chat_record(:create!, **kwargs)
+      end
+
+      # Finds the ::chat_model record with +id+ and applies this agent's
+      # configuration at runtime, without persisting instructions. Returns
+      # the record.
+      #
+      #   chat = WorkAssistant.find(params[:id])
+      #
+      # Raises ArgumentError if ::chat_model is not configured.
+      def find(id, **kwargs)
+        raise ArgumentError, 'chat_model must be configured to use find' unless resolved_chat_model
+
+        input_values, = partition_inputs(kwargs)
+        record = resolved_chat_model.find(id)
+        apply_configuration(record, input_values:, persist_instructions: false)
+
+        record
+      end
+
+      # Re-renders this agent's instructions and persists them on the given
+      # ::chat_model record (or the record found by that id). Keywords
+      # matching declared ::inputs become runtime inputs. Returns the
+      # record.
+      #
+      #   WorkAssistant.sync_instructions(chat)
+      #
+      # Raises ArgumentError if ::chat_model is not configured.
+      def sync_instructions(chat_or_id, **kwargs)
+        raise ArgumentError, 'chat_model must be configured to use sync_instructions' unless resolved_chat_model
+
+        input_values, = partition_inputs(kwargs)
+        record = chat_or_id.is_a?(resolved_chat_model) ? chat_or_id : resolved_chat_model.find(chat_or_id)
+        apply_assume_model_exists(record)
+        apply_protocol(record)
+        apply_context(record)
+        runtime = runtime_context(chat: record, inputs: input_values)
+        apply_instructions(
+          record,
+          runtime,
+          inputs: input_values,
+          persist: true,
+          persistent_only: true
+        )
+        record
+      end
+
+      def render_prompt(name, chat:, inputs:, locals:) # :nodoc:
+        resolved_locals = resolve_prompt_locals(locals, runtime: runtime_context(chat:, inputs:), chat:, inputs:)
+        RubyLLM.render_prompt("#{prompt_agent_path}/#{name}", **resolved_locals)
+      end
+
+      def partition_inputs(kwargs) # :nodoc:
+        input_values = {}
+        chat_options = {}
+
+        kwargs.each do |key, value|
+          symbolized_key = key.to_sym
+          if inputs.include?(symbolized_key)
+            input_values[symbolized_key] = value
+          else
+            chat_options[symbolized_key] = value
+          end
+        end
+
+        [input_values, chat_options]
+      end
+
+      def apply_configuration(chat, input_values:, persist_instructions:) # :nodoc:
+        runtime = runtime_context(chat:, inputs: input_values)
+        apply_chat_options(chat)
+        apply_context(chat)
+        apply_instructions(chat, runtime, inputs: input_values, persist: persist_instructions)
+        apply_tools(chat, runtime)
+        apply_passthrough_options(chat)
+        apply_thinking(chat)
+        apply_citations(chat)
+        apply_end_user(chat, runtime)
+        apply_caching(chat, runtime)
+        apply_compaction(chat)
+        apply_provider_options(chat, runtime)
+        apply_headers(chat, runtime)
+        apply_schema(chat, runtime)
+        apply_fallbacks(chat)
+      end
+
+      private
+
+      def validate_thinking_options(enabled, options)
+        raise ArgumentError, 'thinking accepts false or thinking options' unless [true, false].include?(enabled)
+        raise ArgumentError, 'thinking false does not accept options' if !enabled && options.any?
+        raise ArgumentError, 'thinking options cannot be nil; use thinking false to disable' if options.value?(nil)
+
+        unsupported = options.keys - THINKING_OPTIONS
+        return if unsupported.empty?
+
+        raise ArgumentError, "thinking accepts #{THINKING_OPTIONS.join(', ')}, got #{unsupported.join(', ')}"
+      end
+
+      def rescue_handler_key(exception_class)
+        case exception_class
+        when Module then exception_class.name || exception_class
+        when String then exception_class
+        else raise ArgumentError, "#{exception_class.inspect} is not an exception class or its name"
+        end
+      end
+
+      def rescue_handler_class(class_name)
+        return class_name if class_name.is_a?(Module)
+
+        Object.const_get(class_name)
+      rescue NameError
+        nil
+      end
+
+      def copy_inherited_config_to(subclass)
+        subclass.instance_variable_set(:@inherited_instruction_declarations, instruction_declarations.dup)
+
+        DUPED_INHERITED_CONFIG.each do |ivar, default|
+          value = instance_variable_defined?(ivar) ? instance_variable_get(ivar) : default
+          subclass.instance_variable_set(ivar, value.respond_to?(:dup) ? value.dup : value)
+        end
+
+        COPIED_INHERITED_CONFIG.each do |ivar|
+          subclass.instance_variable_set(ivar, instance_variable_get(ivar))
+        end
+      end
+
+      def with_rails_chat_record(method_name, **kwargs)
+        raise ArgumentError, 'chat_model must be configured to use create/create!' unless resolved_chat_model
+
+        input_values, chat_options = partition_inputs(kwargs)
+        record = resolved_chat_model.public_send(
+          method_name, **resolved_chat_kwargs(inputs: input_values), **chat_options
+        )
+        apply_configuration(record, input_values:, persist_instructions: true) if record
+        record
+      end
+
+      def apply_context(chat)
+        chat.with_context(context) if context
+      end
+
+      def apply_instructions(chat, runtime, inputs:, persist:, persistent_only: false)
+        instructions_config.each do |declaration|
+          next if persistent_only && !declaration[:persist]
+
+          value = resolved_instruction_value(declaration, chat, runtime, inputs:)
+          next if blank_instruction?(value)
+
+          options = {
+            append: declaration[:append],
+            cache_until_here: declaration[:cache_until_here]
+          }
+          options[:persist] = persist && declaration[:persist] if rails_chat_record?(chat)
+          chat.with_instructions(value, **options)
+        end
+      end
+
+      # An empty prompt file, such as the one the agent generator writes,
+      # means no instructions rather than an empty system message.
+      def blank_instruction?(value)
+        value.nil? || (value.respond_to?(:strip) && value.strip.empty?)
+      end
+
+      def apply_tools(chat, runtime)
+        tools_to_apply = Array(evaluate(tools, runtime)).compact
+        chat.with_tools(*tools_to_apply) if tools_to_apply.any?
+
+        options = evaluate(tool_options, runtime)
+        chat.with_tool_options(**options) if options && !options.empty?
+
+        provider_tools_to_apply = Array(evaluate(provider_tools, runtime)).compact
+        chat.with_provider_tools(*provider_tools_to_apply) if provider_tools_to_apply.any?
+      end
+
+      def apply_passthrough_options(chat)
+        PASSTHROUGH_OPTIONS.each do |option|
+          value = instance_variable_get(:"@#{option}")
+          chat.public_send(:"with_#{option}", value) unless value.nil?
+        end
+      end
+
+      def apply_thinking(chat)
+        return if @thinking.nil?
+
+        @thinking == false ? chat.with_thinking(false) : chat.with_thinking(**@thinking)
+      end
+
+      def apply_citations(chat)
+        chat.with_citations(@citations) unless @citations.nil?
+      end
+
+      def apply_end_user(chat, runtime)
+        value = evaluate(end_user, runtime)
+        chat.with_end_user(value) unless value.nil?
+      end
+
+      def apply_caching(chat, runtime)
+        value = evaluate(@caching, runtime)
+        return if value.nil?
+
+        value == false ? chat.with_caching(false) : chat.with_caching(**value)
+      end
+
+      def apply_compaction(chat)
+        return if @compaction.nil?
+
+        @compaction == false ? chat.with_compaction(false) : chat.with_compaction(**@compaction)
+      end
+
+      def apply_provider_options(chat, runtime)
+        value = evaluate(provider_options, runtime)
+        chat.with_provider_options(**value) if value && !value.empty?
+      end
+
+      def apply_headers(chat, runtime)
+        value = evaluate(headers, runtime)
+        chat.with_headers(**value) if value && !value.empty?
+      end
+
+      def apply_schema(chat, runtime)
+        value = resolved_schema_value(runtime)
+        chat.with_schema(value) if value
+      end
+
+      def apply_fallbacks(chat)
+        chat.with_fallbacks(*fallbacks, **fallback_options) if fallbacks.any?
+      end
+
+      def resolved_schema_value(runtime)
+        value = schema
+        return value unless value.is_a?(Proc)
+        return evaluate(value, runtime) if value.lambda?
+
+        Schematist::Schema.create(&value)
+      end
+
+      def apply_chat_options(chat)
+        apply_assume_model_exists(chat)
+        apply_protocol(chat)
+      end
+
+      def apply_assume_model_exists(chat_object)
+        return unless chat_kwargs.key?(:assume_model_exists) &&
+                      resolved_chat_model &&
+                      chat_object.is_a?(resolved_chat_model)
+
+        chat_object.assume_model_exists = chat_kwargs[:assume_model_exists]
+      end
+
+      def apply_protocol(chat_object)
+        return unless chat_kwargs.key?(:protocol) &&
+                      resolved_chat_model &&
+                      chat_object.is_a?(resolved_chat_model)
+
+        chat_object.protocol = chat_kwargs[:protocol]
+      end
+
+      def evaluate(value, runtime)
+        value.is_a?(Proc) ? runtime.instance_exec(&value) : value
+      end
+
+      def resolved_instruction_value(declaration, chat_object, runtime, inputs:)
+        value = evaluate(declaration[:value], runtime)
+        return value unless prompt_instruction?(value)
+
+        runtime.prompt(
+          value[:prompt],
+          **resolve_prompt_locals(value[:locals] || {}, runtime:, chat: chat_object, inputs:)
+        )
+      end
+
+      def instructions_config
+        return instruction_declarations if @instruction_declarations&.any? || !default_instructions_prompt_exists?
+
+        [{
+          value: { prompt: 'instructions', locals: {} },
+          append: false,
+          persist: true,
+          cache_until_here: false
+        }]
+      end
+
+      def instruction_declarations
+        @instruction_declarations || @inherited_instruction_declarations || []
+      end
+
+      def rails_chat_record?(chat)
+        resolved_chat_model && chat.is_a?(resolved_chat_model)
+      end
+
+      def default_instructions_prompt_exists?
+        name && File.exist?(Prompt.new("#{prompt_agent_path}/instructions").path)
+      end
+
+      def prompt_instruction?(value)
+        value.is_a?(Hash) && value[:prompt]
+      end
+
+      def resolve_prompt_locals(locals, runtime:, chat:, inputs:)
+        base = { chat: chat }.merge(inputs)
+        evaluated = locals.each_with_object({}) do |(key, value), acc|
+          acc[key.to_sym] = value.is_a?(Proc) ? runtime.instance_exec(&value) : value
+        end
+        base.merge(evaluated)
+      end
+
+      def runtime_context(chat:, inputs:)
+        agent_class = self
+        Object.new.tap do |runtime|
+          runtime.define_singleton_method(:chat) { chat }
+          runtime.define_singleton_method(:prompt) do |name, **locals|
+            agent_class.render_prompt(name, chat:, inputs:, locals:)
+          end
+
+          inputs.each do |name, value|
+            runtime.define_singleton_method(name) { value }
+          end
+        end
+      end
+
+      def prompt_agent_path
+        class_name = name || 'agent'
+        Support::Utils.underscore(class_name.gsub('::', '/')).tr('-', '_')
+      end
+
+      def resolved_chat_model
+        return @resolved_chat_model if defined?(@resolved_chat_model)
+
+        @resolved_chat_model = case @chat_model
+                               when String then Object.const_get(@chat_model)
+                               else @chat_model
+                               end
+      end
+    end
+
+    # Returns a new agent wrapping +chat:+, or wrapping a newly built chat
+    # when +chat:+ is +nil+. Applies the agent's configuration either way.
+    # Keywords matching declared inputs (and the +inputs:+ hash) become
+    # runtime inputs; the rest are forwarded to RubyLLM.chat when the agent
+    # builds its own chat. Pass <tt>persist_instructions: false</tt> to
+    # apply instructions at runtime only, without persisting them on a
+    # Rails-backed record.
+    #
+    #   agent = WorkAssistant.new
+    #   agent.ask "Hello"
+    #
+    #   record = Chat.find(params[:id])
+    #   WorkAssistant.new(chat: record)
+    #
+    def initialize(chat: nil, inputs: nil, persist_instructions: true, **kwargs)
+      input_values, chat_options = self.class.partition_inputs(kwargs)
+      input_values = input_values.merge(inputs || {})
+      @chat = chat || self.class.build_chat(inputs: input_values, options: chat_options)
+      self.class.apply_configuration(@chat, input_values:, persist_instructions:)
+    end
+
+    # The wrapped Chat, or the chat record in Rails mode.
+    attr_reader :chat
+
+    # Agent instances delegate the Chat conversation API to the wrapped
+    # #chat without adapting its return values.
+    def_delegators :chat, *CHAINABLE_CHAT_DELEGATES, *PASSTHROUGH_CHAT_DELEGATES
+
+    ##
+    # :method: with_instructions
+    # :call-seq: with_instructions(instructions, append: false, cache_until_here: false)
+    #
+    # Delegates to Chat#with_instructions. See that method for arguments and return values.
+
+    ##
+    # :method: with_tools
+    # :call-seq: with_tools(*tools)
+    #
+    # Delegates to Chat#with_tools. See that method for arguments and return values.
+
+    ##
+    # :method: with_provider_tools
+    # :call-seq: with_provider_tools(*tools, **tools_with_options)
+    #
+    # Delegates to Chat#with_provider_tools. See that method for arguments and return values.
+
+    ##
+    # :method: with_tool_options
+    # :call-seq: with_tool_options(**options)
+    #
+    # Delegates to Chat#with_tool_options. See that method for arguments and return values.
+
+    ##
+    # :method: with_model
+    # :call-seq: with_model(model_id, provider: nil, protocol: nil, assume_model_exists: false)
+    #
+    # Delegates to Chat#with_model. See that method for arguments and return values.
+
+    ##
+    # :method: with_temperature
+    # :call-seq: with_temperature(temperature)
+    #
+    # Delegates to Chat#with_temperature. See that method for arguments and return values.
+
+    ##
+    # :method: with_max_output_tokens
+    # :call-seq: with_max_output_tokens(max_output_tokens)
+    #
+    # Delegates to Chat#with_max_output_tokens. See that method for arguments and return values.
+
+    ##
+    # :method: with_thinking
+    # :call-seq: with_thinking(enabled = true, **options)
+    #
+    # Delegates to Chat#with_thinking. See that method for arguments and return values.
+
+    ##
+    # :method: with_citations
+    # :call-seq: with_citations(enabled = true)
+    #
+    # Delegates to Chat#with_citations. See that method for arguments and return values.
+
+    ##
+    # :method: with_end_user
+    # :call-seq: with_end_user(end_user)
+    #
+    # Delegates to Chat#with_end_user. See that method for arguments and return values.
+
+    ##
+    # :method: with_compaction
+    # :call-seq: with_compaction(options = {})
+    #
+    # Delegates to Chat#with_compaction. See that method for arguments and return values.
+
+    ##
+    # :method: with_caching
+    # :call-seq: with_caching(options = {})
+    #
+    # Delegates to Chat#with_caching. See that method for arguments and return values.
+
+    ##
+    # :method: with_context
+    # :call-seq: with_context(context)
+    #
+    # Delegates to Chat#with_context. See that method for arguments and return values.
+
+    ##
+    # :method: with_provider_options
+    # :call-seq: with_provider_options(provider_options)
+    #
+    # Delegates to Chat#with_provider_options. See that method for arguments and return values.
+
+    ##
+    # :method: with_headers
+    # :call-seq: with_headers(headers)
+    #
+    # Delegates to Chat#with_headers. See that method for arguments and return values.
+
+    ##
+    # :method: with_schema
+    # :call-seq: with_schema(schema)
+    #
+    # Delegates to Chat#with_schema. See that method for arguments and return values.
+
+    ##
+    # :method: with_fallbacks
+    # :call-seq: with_fallbacks(*models, on: Fallback::DEFAULT_ERRORS)
+    #
+    # Delegates to Chat#with_fallbacks. See that method for arguments and return values.
+
+    ##
+    # :method: before_request
+    # :call-seq: before_request(&block)
+    #
+    # Delegates to Chat#before_request. See that method for arguments and return values.
+
+    ##
+    # :method: before_message
+    # :call-seq: before_message(&block)
+    #
+    # Delegates to Chat#before_message. See that method for arguments and return values.
+
+    ##
+    # :method: after_message
+    # :call-seq: after_message(&block)
+    #
+    # Delegates to Chat#after_message. See that method for arguments and return values.
+
+    ##
+    # :method: before_tool_call
+    # :call-seq: before_tool_call(&block)
+    #
+    # Delegates to Chat#before_tool_call. See that method for arguments and return values.
+
+    ##
+    # :method: after_tool_result
+    # :call-seq: after_tool_result(&block)
+    #
+    # Delegates to Chat#after_tool_result. See that method for arguments and return values.
+
+    ##
+    # :method: before_fallback
+    # :call-seq: before_fallback(&block)
+    #
+    # Delegates to Chat#before_fallback. See that method for arguments and return values.
+
+    ##
+    # :method: after_fallback
+    # :call-seq: after_fallback(&block)
+    #
+    # Delegates to Chat#after_fallback. See that method for arguments and return values.
+
+    ##
+    # :method: cancel
+    # :call-seq: cancel()
+    #
+    # Delegates to Chat#cancel. See that method for arguments and return values.
+
+    ##
+    # :method: approve
+    # :call-seq: approve(tool_call)
+    #
+    # Delegates to Chat#approve. See that method for arguments and return values.
+
+    ##
+    # :method: deny
+    # :call-seq: deny(tool_call)
+    #
+    # Delegates to Chat#deny. See that method for arguments and return values.
+
+    ##
+    # :method: cache_until_here
+    # :call-seq: cache_until_here()
+    #
+    # Delegates to Chat#cache_until_here. See that method for arguments and return values.
+
+    ##
+    # :method: model
+    # :call-seq: model
+    #
+    # Delegates to Chat#model. See that method for arguments and return values.
+
+    ##
+    # :method: provider
+    # :call-seq: provider
+    #
+    # Delegates to Chat#provider. See that method for arguments and return values.
+
+    ##
+    # :method: messages
+    # :call-seq: messages
+    #
+    # Delegates to Chat#messages. See that method for arguments and return values.
+
+    ##
+    # :method: tools
+    # :call-seq: tools
+    #
+    # Delegates to Chat#tools. See that method for arguments and return values.
+
+    ##
+    # :method: provider_tools
+    # :call-seq: provider_tools
+    #
+    # Delegates to Chat#provider_tools. See that method for arguments and return values.
+
+    ##
+    # :method: tool_options
+    # :call-seq: tool_options()
+    #
+    # Delegates to Chat#tool_options. See that method for arguments and return values.
+
+    ##
+    # :method: provider_options
+    # :call-seq: provider_options
+    #
+    # Delegates to Chat#provider_options. See that method for arguments and return values.
+
+    ##
+    # :method: headers
+    # :call-seq: headers
+    #
+    # Delegates to Chat#headers. See that method for arguments and return values.
+
+    ##
+    # :method: schema
+    # :call-seq: schema
+    #
+    # Delegates to Chat#schema. See that method for arguments and return values.
+
+    ##
+    # :method: concurrency
+    # :call-seq: concurrency
+    #
+    # Delegates to Chat#concurrency. See that method for arguments and return values.
+
+    ##
+    # :method: caching
+    # :call-seq: caching
+    #
+    # Delegates to Chat#caching. See that method for arguments and return values.
+
+    ##
+    # :method: citations
+    # :call-seq: citations
+    #
+    # Delegates to Chat#citations. See that method for arguments and return values.
+
+    ##
+    # :method: compaction
+    # :call-seq: compaction
+    #
+    # Delegates to Chat#compaction. See that method for arguments and return values.
+
+    ##
+    # :method: context
+    # :call-seq: context
+    #
+    # Delegates to Chat#context. See that method for arguments and return values.
+
+    ##
+    # :method: end_user
+    # :call-seq: end_user
+    #
+    # Delegates to Chat#end_user. See that method for arguments and return values.
+
+    ##
+    # :method: fallbacks
+    # :call-seq: fallbacks
+    #
+    # Delegates to Chat#fallbacks. See that method for arguments and return values.
+
+    ##
+    # :method: thinking
+    # :call-seq: thinking()
+    #
+    # Delegates to Chat#thinking. See that method for arguments and return values.
+
+    ##
+    # :method: temperature
+    # :call-seq: temperature
+    #
+    # Returns Chat#temperature from the wrapped chat.
+
+    ##
+    # :method: max_output_tokens
+    # :call-seq: max_output_tokens
+    #
+    # Returns Chat#max_output_tokens from the wrapped chat.
+
+    ##
+    # :method: each
+    # :call-seq: each(&block)
+    #
+    # Delegates to Chat#each. See that method for arguments and return values.
+
+    ##
+    # :method: complete?
+    # :call-seq: complete?()
+    #
+    # Delegates to Chat#complete?. See that method for arguments and return values.
+
+    ##
+    # :method: cancelled?
+    # :call-seq: cancelled?()
+    #
+    # Delegates to Chat#cancelled?. See that method for arguments and return values.
+
+    ##
+    # :method: awaiting_approval?
+    # :call-seq: awaiting_approval?()
+    #
+    # Delegates to Chat#awaiting_approval?. See that method for arguments and return values.
+
+    ##
+    # :method: pending_approvals
+    # :call-seq: pending_approvals()
+    #
+    # Delegates to Chat#pending_approvals. See that method for arguments and return values.
+
+    ##
+    # :method: add_message
+    # :call-seq: add_message(message_or_attributes)
+    #
+    # Delegates to Chat#add_message. See that method for arguments and return values.
+
+    ##
+    # :method: tokens
+    # :call-seq: tokens()
+    #
+    # Delegates to Chat#tokens. See that method for arguments and return values.
+
+    ##
+    # :method: cost
+    # :call-seq: cost()
+    #
+    # Delegates to Chat#cost. See that method for arguments and return values.
+
+    ##
+    # :method: render
+    # :call-seq: render()
+    #
+    # Delegates to Chat#render. See that method for arguments and return values.
+
+    ##
+    # :method: ask
+    # :call-seq: ask(message = nil, with: nil, &block)
+    #
+    # Delegates to Chat#ask, routing exceptions through the handlers
+    # declared with ::rescue_from.
+
+    ##
+    # :method: complete
+    # :call-seq: complete(&block)
+    #
+    # Delegates to Chat#complete, routing exceptions through the handlers
+    # declared with ::rescue_from.
+
+    ##
+    # :method: say
+    # :call-seq: say(message = nil, with: nil, &block)
+    #
+    # Delegates to Chat#say, the alias for Chat#ask, with ::rescue_from handling.
+
+    ##
+    # :method: ask_later
+    # :call-seq: ask_later(message = nil, with: nil)
+    #
+    # Stages a message through Chat#ask_later without calling the provider.
+    # Returns the wrapped chat. Exceptions use ::rescue_from handlers.
+
+    ##
+    # :method: generate
+    # :call-seq: generate(&block)
+    #
+    # Generates one response through Chat#generate without executing tools.
+    # Returns a Message. Exceptions use ::rescue_from handlers.
+
+    ##
+    # :method: run_tools
+    # :call-seq: run_tools
+    #
+    # Runs pending tools through Chat#run_tools, respecting approval decisions.
+    # Returns the wrapped chat. Exceptions use ::rescue_from handlers.
+
+    ##
+    # :method: step
+    # :call-seq: step(&block)
+    #
+    # Advances the conversation through Chat#step. Returns a Message or
+    # +nil+ when no progress is possible. Exceptions use ::rescue_from handlers.
+
+    ##
+    # :method: count_tokens
+    # :call-seq: count_tokens(message = nil)
+    #
+    # Counts request tokens through Chat#count_tokens without generating a
+    # response. Returns an Integer. Exceptions use ::rescue_from handlers.
+
+    ##
+    # :method: compact
+    # :call-seq: compact
+    #
+    # Compacts the model context through Chat#compact and returns its Message.
+    # Exceptions use ::rescue_from handlers.
+
+    GUARDED_OPERATIONS.each do |operation|
+      define_method(operation) do |*args, **kwargs, &block|
+        chat.public_send(operation, *args, **kwargs, &block)
+      rescue StandardError => e
+        rescue_with_handler(e)
+      end
+    end
+
+    # Runs the ::rescue_from handler matching +exception+ and returns its
+    # value, or re-raises when no handler matches. The chat operations call
+    # this for you.
+    def rescue_with_handler(exception)
+      handler = self.class.rescue_handler_for(exception)
+      raise exception unless handler
+
+      return instance_exec(exception, &handler) unless handler.is_a?(Symbol)
+
+      handler_method = method(handler)
+      handler_method.arity.zero? ? handler_method.call : handler_method.call(exception)
+    end
+  end
+end

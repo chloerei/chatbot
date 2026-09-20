@@ -1,0 +1,52 @@
+# frozen_string_literal: true
+
+require 'ruby_llm'
+
+module RubyLLM
+  module Providers
+    # <%= provider_description %>
+    class <%= class_name %> < Provider
+      # <%= class_name %>'s <%= protocol_class_name %> protocol.
+      class <%= protocol_class_name %> < <%= protocol_superclass %>
+        def models_url
+          'models'
+        end
+      end
+
+      protocol :<%= protocol_name %>, <%= protocol_class_name %>
+
+      def api_base
+        @config.<%= api_base_config %> || '<%= api_base %>'
+      end
+
+      def headers
+        { 'Authorization' => "Bearer #{@config.<%= api_key_config %>}" }
+      end
+
+      class << self
+        def configuration_options
+          %i[<%= api_key_config %> <%= api_base_config %>]
+        end
+
+        def configuration_requirements
+          %i[<%= api_key_config %>]
+        end
+<% if dynamic_models? -%>
+
+        def assume_models_exist?
+          true
+        end
+<% else -%>
+
+        # Use this only when the provider has no model-listing endpoint.
+        # def assume_models_exist?
+        #   true
+        # end
+<% end -%>
+      end
+    end
+  end
+end
+
+RubyLLM::Provider.register :<%= slug %>, RubyLLM::Providers::<%= class_name %>,
+                           models: File.expand_path('../../../models.json', __dir__)

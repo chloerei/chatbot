@@ -1,0 +1,269 @@
+# frozen_string_literal: true
+
+module RubyLLM
+  module Generators
+    # Shared helpers for RubyLLM generators
+    module GeneratorHelpers
+      APPLICATION_MODEL_TYPES = %w[chat message].freeze
+      DEFAULT_MODEL_NAMES = {
+        chat: 'Chat',
+        message: 'Message'
+      }.freeze
+
+      def parse_model_mappings(allowed_types: APPLICATION_MODEL_TYPES, defaults: DEFAULT_MODEL_NAMES)
+        @model_names = defaults.dup
+        @explicit_model_mappings = []
+
+        model_mappings.each do |mapping|
+          key, value = mapping.split(':', 2)
+          validate_model_mapping!(mapping, key, value, allowed_types)
+          raise Thor::Error, "Duplicate model mapping: #{key}" if @explicit_model_mappings.include?(key.to_sym)
+
+          @explicit_model_mappings << key.to_sym
+          @model_names[key.to_sym] = value.classify
+        end
+
+        @model_names
+      end
+
+      def validate_model_mapping!(mapping, key, value, allowed_types)
+        return if allowed_types.include?(key) && value.present?
+
+        expected = allowed_types.map { |type| "#{type}:ModelName" }.join(', ')
+        raise Thor::Error, "Invalid model mapping #{mapping.inspect}. Expected one of: #{expected}"
+      end
+
+      %i[chat message].each do |type|
+        define_method("#{type}_model_name") do
+          @model_names ||= parse_model_mappings
+          @model_names[type]
+        end
+
+        define_method("#{type}_table_name") do
+          table_name_for(send("#{type}_model_name"))
+        end
+
+        define_method("#{type}_variable_name") do
+          variable_name_for(send("#{type}_model_name"))
+        end
+      end
+
+      # Models remain a UI resource even though RubyLLM owns their persistence.
+      # Keep that resource beside a namespaced chat without implying that the
+      # application has a corresponding ActiveRecord model.
+      def model_model_name
+        return 'Model' unless chat_model_name.include?('::')
+
+        "#{chat_model_name.deconstantize}::Model"
+      end
+
+      # Routes, view paths and DOM ids for the models UI. Deliberately not a
+      # table name: models live in ruby_llm_models whatever the app calls this
+      # resource, and they are reached through the :model association.
+      def model_resource_name = table_name_for(model_model_name)
+      def model_variable_name = variable_name_for(model_model_name)
+
+      def usage_operations_sql = sql_string_list(::RubyLLM::Accounting::Usage::Entry::OPERATIONS)
+      def usage_statuses_sql = sql_string_list(::RubyLLM::Accounting::Usage::Entry::STATUSES)
+      def tool_call_variable_name = 'tool_call'
+
+      def chat_controller_class_name
+        controller_class_name_for(chat_model_name)
+      end
+
+      def message_controller_class_name
+        controller_class_name_for(message_model_name)
+      end
+
+      def model_controller_class_name
+        controller_class_name_for(model_model_name)
+      end
+
+      def chat_job_class_name
+        "#{chat_variable_name.camelize}ResponseJob"
+      end
+
+      def acts_as_chat_declaration
+        params = []
+
+        add_association_params(params, :messages, message_table_name, message_model_name,
+                               owner_table: chat_table_name, owner_model_name: chat_model_name, plural: true)
+        "acts_as_chat#{" #{params.join(', ')}" if params.any?}"
+      end
+
+      def acts_as_message_declaration
+        params = []
+
+        add_association_params(params, :chat, chat_table_name, chat_model_name,
+                               owner_table: message_table_name, owner_model_name: message_model_name)
+        "acts_as_message#{" #{params.join(', ')}" if params.any?}"
+      end
+
+      def create_namespace_modules
+        namespaces = []
+
+        [chat_model_name, message_model_name].each do |model_name|
+          if model_name.include?('::')
+            namespace = model_name.split('::').first
+            namespaces << namespace unless namespaces.include?(namespace)
+          end
+        end
+
+        namespaces.each do |namespace|
+          module_path = "app/models/#{namespace.underscore}.rb"
+          next if File.exist?(Rails.root.join(module_path))
+
+          create_file module_path do
+            <<~RUBY
+              module #{namespace}
+                def self.table_name_prefix
+                  "#{namespace.underscore}_"
+                end
+              end
+            RUBY
+          end
+        end
+      end
+
+      def migration_version
+        "[#{Rails::VERSION::MAJOR}.#{Rails::VERSION::MINOR}]"
+      end
+
+      # Rack 3.1 renamed the 422 symbol and Rails mirrors the rename from 7.2 on.
+      def unprocessable_content_status
+        constants = ::ActionDispatch::Constants
+        return :unprocessable_entity unless constants.const_defined?(:UNPROCESSABLE_CONTENT)
+
+        constants::UNPROCESSABLE_CONTENT
+      end
+
+      def reference_type
+        application = Rails.application if Rails.respond_to?(:application)
+        return :bigint unless application
+
+        application.config.generators.options.dig(:active_record, :primary_key_type) || :bigint
+      end
+
+      def create_migration_class_name(table_name)
+        "create_#{table_name}".camelize
+      end
+
+      def postgresql?
+        ::ActiveRecord::Base.connection.adapter_name.downcase.include?('postgresql')
+      rescue StandardError
+        false
+      end
+
+      def mysql?
+        ::ActiveRecord::Base.connection.adapter_name.downcase.include?('mysql')
+      rescue StandardError
+        false
+      end
+
+      def table_exists?(table_name)
+        ::ActiveRecord::Base.connection.table_exists?(table_name)
+      rescue StandardError
+        false
+      end
+
+      def ui_variant
+        @ui_variant ||= case options[:ui]
+                        when 'tailwind'
+                          :tailwind
+                        when 'auto'
+                          tailwind_available? ? :tailwind : :scaffold
+                        else
+                          :scaffold
+                        end
+      end
+
+      def ui_template(template_path)
+        return template_path unless ui_variant == :tailwind
+
+        # Keep Tailwind templates as a separate set so we can mirror Rails/Tailwind
+        # scaffold conventions without complicating scaffold templates.
+        tailwind_template = "tailwind/#{template_path}"
+        File.exist?(File.join(self.class.source_root, "#{tailwind_template}.tt")) ? tailwind_template : template_path
+      end
+
+      def tailwind_available?
+        Rails.root.join('app/assets/tailwind/application.css').exist? ||
+          Rails.root.join('config/tailwind.config.js').exist? ||
+          gem_in_bundle?('tailwindcss-rails') ||
+          gem_in_bundle?('cssbundling-rails')
+      end
+
+      def gem_in_bundle?(gem_name)
+        gemfile_path = Rails.root.join('Gemfile')
+        lockfile_path = Rails.root.join('Gemfile.lock')
+
+        [gemfile_path, lockfile_path].any? do |path|
+          path.exist? && path.read.include?(gem_name)
+        end
+      end
+
+      private
+
+      def add_association_params(params, default_assoc, table_name, model_name,
+                                 owner_table:, owner_model_name:, plural: false)
+        assoc = plural ? table_name.to_sym : table_name.singularize.to_sym
+        collection_association = collection_association?(default_assoc, plural)
+        foreign_key = inferred_foreign_key(table_name, owner_table, collection_association)
+        default_foreign_key = default_inferred_foreign_key(assoc, owner_model_name, collection_association)
+
+        params << "#{default_assoc}: :#{assoc}" if assoc != default_assoc
+        params << "#{default_assoc.to_s.singularize}_class: '#{model_name}'" if model_name != assoc.to_s.classify
+        params << "#{default_assoc}_foreign_key: :#{foreign_key}" if foreign_key != default_foreign_key
+      end
+
+      def collection_association?(default_assoc, plural)
+        plural || default_assoc.to_s.pluralize == default_assoc.to_s
+      end
+
+      def inferred_foreign_key(table_name, owner_table, collection_association)
+        return "#{table_name.singularize}_id" unless collection_association
+
+        "#{owner_table.singularize}_id"
+      end
+
+      # Rails default inference:
+      # belongs_to :assoc    -> assoc_id
+      # has_many/has_one     -> owner demodulized model name + _id
+      def default_inferred_foreign_key(association_name, owner_model_name, collection_association)
+        return "#{association_name}_id" unless collection_association
+
+        "#{owner_model_name.demodulize.underscore}_id"
+      end
+
+      def sql_string_list(values)
+        values.map { |value| "'#{value}'" }.join(', ')
+      end
+
+      # Convert namespaced model names to proper table names
+      # e.g., "Assistant::Chat" -> "assistant_chats" (not "assistant/chats")
+      def table_name_for(model_name)
+        model_name.underscore.pluralize.tr('/', '_')
+      end
+
+      # Convert model name to instance variable name
+      # e.g., "LLM::Chat" -> "llm_chat" (not "llm/chat")
+      def variable_name_for(model_name)
+        model_name.underscore.tr('/', '_')
+      end
+
+      # Convert model name to controller class name
+      # For namespaced models, use Rails convention: "Llm::Chat" -> "Llm::ChatsController"
+      # For regular models: "Chat" -> "ChatsController"
+      def controller_class_name_for(model_name)
+        if model_name.include?('::')
+          parts = model_name.split('::')
+          namespace = parts[0..-2].join('::')
+          resource = parts.last.pluralize
+          "#{namespace}::#{resource}Controller"
+        else
+          "#{model_name.pluralize}Controller"
+        end
+      end
+    end
+  end
+end

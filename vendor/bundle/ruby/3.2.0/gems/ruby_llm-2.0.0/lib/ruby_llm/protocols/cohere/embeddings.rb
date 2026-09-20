@@ -1,0 +1,68 @@
+# frozen_string_literal: true
+
+module RubyLLM
+  module Protocols
+    class Cohere
+      # Embeddings methods for the Cohere v2 API integration
+      module Embeddings
+        DEFAULT_INPUT_TYPE = 'search_document'
+
+        module_function
+
+        def embedding_url(...)
+          'v2/embed'
+        end
+
+        # rubocop:disable-next Lint/UnusedMethodArgument
+        def render_embedding_payload(text, model:, dimensions:, task_type: nil, title: nil, with: [],
+                                     provider_options: {})
+          image_only = with.any? && separate_image_embeddings?(model)
+          payload = {
+            model: model,
+            input_type: task_type || (image_only ? 'image' : DEFAULT_INPUT_TYPE),
+            embedding_types: ['float'],
+            output_dimension: dimensions
+          }.compact
+
+          payload.merge!(image_only ? image_embedding_inputs(text, with) : embedding_inputs(text, with))
+          Support::Utils.deep_merge(payload, provider_options)
+        end
+
+        def supports_embedding_media?
+          true
+        end
+
+        def separate_image_embeddings?(model) # :nodoc:
+          %w[embed-english-v3.0 embed-multilingual-v3.0].include?(model)
+        end
+
+        def image_embedding_inputs(text, attachments) # :nodoc:
+          raise ArgumentError, 'Cohere Embed v3 accepts text or an image, not both' unless text.nil? || text == ''
+          raise ArgumentError, 'Cohere Embed v3 accepts one image per request' unless attachments.one?
+          raise UnsupportedAttachmentError, attachments.first.mime_type unless attachments.first.image?
+
+          { images: ["data:#{attachments.first.mime_type};base64,#{attachments.first.encoded}"] }
+        end
+
+        def parse_embedding_response(response, model:, text:)
+          data = response.body
+          vectors = data.dig('embeddings', 'float')
+          vectors = vectors.first if vectors&.length == 1 && !text.is_a?(Array)
+          billed = data.dig('meta', 'billed_units') || {}
+
+          Embedding.new(vectors:, model:, input_tokens: billed['input_tokens'])
+        end
+
+        # embed-v4 takes mixed text and images as `inputs`; text-only requests
+        # keep using the simpler `texts` array every Embed model accepts.
+        def embedding_inputs(text, attachments)
+          return { texts: Support::Utils.to_safe_array(text).map(&:to_s) } if attachments.empty?
+
+          raise ArgumentError, 'embed one text at a time when embedding attachments' if text.is_a?(Array)
+
+          { inputs: [{ content: Media.format_content(text, attachments) }] }
+        end
+      end
+    end
+  end
+end

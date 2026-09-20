@@ -1,0 +1,147 @@
+# frozen_string_literal: true
+
+module RubyLLM
+  module Providers
+    # Azure AI Foundry / OpenAI-compatible API integration.
+    class Azure < Provider
+      DEFAULT_CHAT_API_VERSION = '2024-05-01-preview'
+      DEFAULT_EMBEDDINGS_API_VERSION = '2024-05-01-preview'
+      DEFAULT_MODELS_API_VERSION = 'preview'
+
+      protocol :chat_completions, Azure::ChatCompletions, batches: Azure::ChatCompletions::Batches
+      protocol :responses, Azure::Responses
+      protocol :files, Protocols::Azure::Files
+      protocol :cohere, Azure::Cohere
+
+      def api_base
+        @config.azure_api_base
+      end
+
+      # Deployments named after gpt-5.4+ models need the Responses API for
+      # tool use, so they route there automatically. Deployment names often
+      # differ from model ids, so the routing stays conservative; an explicit
+      # protocol: or the azure_protocol configuration option overrides it.
+      def protocol_for(model, operation: nil, **)
+        return protocols[:cohere] if operation == :rerank
+        if operation == :embed &&
+           %w[Cohere-embed-v3-english Cohere-embed-v3-multilingual embed-v-4-0].include?(model.id)
+          return protocols[:cohere]
+        end
+
+        model.id.match?(/gpt-5\.[4-9]|gpt-5\d/) ? protocols[:responses] : super
+      end
+
+      def headers
+        if @config.azure_api_key && URI.parse(api_base).host&.end_with?('.models.ai.azure.com')
+          { 'Authorization' => "Bearer #{@config.azure_api_key}" }
+        elsif @config.azure_api_key
+          { 'api-key' => @config.azure_api_key }
+        else
+          { 'Authorization' => "Bearer #{@config.azure_ai_auth_token}" }
+        end
+      end
+
+      def batch_cost_multiplier(**) = 0.5
+
+      def azure_cohere_url(operation) # :nodoc:
+        base = azure_base_parts[:path_base]
+        base = if base.include?('/providers/cohere')
+                 base.sub(%r{/providers/cohere.*\z}, '/providers/cohere')
+               elsif URI.parse(base).host&.end_with?('.models.ai.azure.com')
+                 base.sub(%r{/v2(?:/.*)?\z}, '')
+               else
+                 "#{azure_base_parts[:root]}/providers/cohere"
+               end
+        "#{base}/v2/#{operation}"
+      end
+
+      def azure_openai_v1_base
+        parts = azure_base_parts
+        if parts[:mode] == :openai_v1_base
+          parts[:path_base]
+        else
+          "#{parts[:root]}/openai/v1"
+        end
+      end
+
+      def azure_media_url(path) # :nodoc:
+        parts = azure_base_parts
+        if parts[:path_base].include?('/openai/deployments/')
+          base = parts[:path_base].sub(%r{/chat/completions/?\z}, '')
+          version = parts[:version] || '2025-04-01-preview'
+        else
+          base = azure_openai_v1_base
+          version = (parts[:version] if parts[:mode] == :openai_v1_base) || 'preview'
+        end
+
+        "#{base.sub(%r{/+\z}, '')}/#{path}?api-version=#{version}"
+      end
+
+      def azure_base_parts
+        @azure_base_parts ||= begin
+          raw_base = api_base.to_s.sub(%r{/+\z}, '')
+          version = raw_base[/[?&]api-version=([^&]+)/i, 1]
+          path_base = raw_base.sub(/\?.*\z/, '')
+
+          mode = if path_base.include?('/chat/completions')
+                   :chat_endpoint
+                 elsif path_base.include?('/openai/deployments/')
+                   :deployment_base
+                 elsif path_base.include?('/openai/v1')
+                   :openai_v1_base
+                 else
+                   :resource_base
+                 end
+
+          {
+            path_base: path_base,
+            root: azure_host_root(path_base),
+            mode: mode,
+            version: version
+          }
+        end
+      end
+
+      class << self
+        def capabilities
+          Azure::Capabilities
+        end
+
+        def configuration_options
+          %i[azure_api_base azure_api_key azure_ai_auth_token]
+        end
+
+        def configuration_requirements
+          %i[azure_api_base]
+        end
+
+        def configured?(config)
+          config.azure_api_base && (config.azure_api_key || config.azure_ai_auth_token)
+        end
+
+        # Azure works with deployment names, instead of model names
+        def assume_models_exist?
+          true
+        end
+      end
+
+      def ensure_configured!
+        missing = []
+        missing << :azure_api_base unless @config.azure_api_base
+        if @config.azure_api_key.nil? && @config.azure_ai_auth_token.nil?
+          missing << 'azure_api_key or azure_ai_auth_token'
+        end
+        return if missing.empty?
+
+        raise ConfigurationError,
+              "Missing configuration for Azure: #{missing.join(', ')}"
+      end
+
+      private
+
+      def azure_host_root(base_without_query)
+        base_without_query.sub(%r{/(models|openai)/.*\z}, '').sub(%r{/+\z}, '')
+      end
+    end
+  end
+end

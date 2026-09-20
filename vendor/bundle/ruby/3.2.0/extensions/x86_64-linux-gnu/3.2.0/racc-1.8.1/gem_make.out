@@ -1,0 +1,18 @@
+current directory: /home/runner/work/chatbot/chatbot/vendor/bundle/ruby/3.2.0/gems/racc-1.8.1/ext/racc/cparse
+/usr/bin/ruby3.2 -I/usr/lib/ruby/vendor_ruby extconf.rb
+creating Makefile
+
+current directory: /home/runner/work/chatbot/chatbot/vendor/bundle/ruby/3.2.0/gems/racc-1.8.1/ext/racc/cparse
+make DESTDIR\= sitearchdir\=./.gem.20260920-4445-y1kxgv sitelibdir\=./.gem.20260920-4445-y1kxgv clean
+
+current directory: /home/runner/work/chatbot/chatbot/vendor/bundle/ruby/3.2.0/gems/racc-1.8.1/ext/racc/cparse
+make DESTDIR\= sitearchdir\=./.gem.20260920-4445-y1kxgv sitelibdir\=./.gem.20260920-4445-y1kxgv
+compiling cparse.c
+linking shared-object racc/cparse.so
+
+current directory: /home/runner/work/chatbot/chatbot/vendor/bundle/ruby/3.2.0/gems/racc-1.8.1/ext/racc/cparse
+make DESTDIR\= sitearchdir\=./.gem.20260920-4445-y1kxgv sitelibdir\=./.gem.20260920-4445-y1kxgv install
+/usr/bin/install -c -m 0755 cparse.so ./.gem.20260920-4445-y1kxgv/racc
+
+current directory: /home/runner/work/chatbot/chatbot/vendor/bundle/ruby/3.2.0/gems/racc-1.8.1/ext/racc/cparse
+make DESTDIR\= sitearchdir\=./.gem.20260920-4445-y1kxgv sitelibdir\=./.gem.20260920-4445-y1kxgv clean
