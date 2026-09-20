@@ -8,12 +8,6 @@
         <p class="text-sm text-base-content/60 mt-1">We'll email you a link to reset it.</p>
       </div>
 
-      <% if flash[:alert] %>
-        <div role="alert" class="alert alert-error alert-soft">
-          <span><%= flash[:alert] %></span>
-        </div>
-      <% end %>
-
       <%= form_with url: passwords_path, class: "flex flex-col gap-2" do |form| %>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">Email</legend>

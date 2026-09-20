@@ -8,18 +8,6 @@
         <p class="text-sm text-base-content/60 mt-1">Enter your details to continue.</p>
       </div>
 
-      <% if flash[:alert] %>
-        <div role="alert" class="alert alert-error alert-soft">
-          <span><%= flash[:alert] %></span>
-        </div>
-      <% end %>
-
-      <% if flash[:notice] %>
-        <div role="alert" class="alert alert-success alert-soft">
-          <span><%= flash[:notice] %></span>
-        </div>
-      <% end %>
-
       <%= form_with url: session_path, class: "flex flex-col gap-2" do |form| %>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">Email</legend>

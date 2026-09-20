@@ -26,5 +26,23 @@
   <body>
     <%# Nested layouts can fill :content; otherwise render the template directly. %>
     <%= content_for?(:content) ? yield(:content) : yield %>
+
+    <%# Flash messages surface as toasts instead of inline banners. %>
+    <% if flash[:notice].present? || flash[:alert].present? %>
+      <div class="toast toast-end toast-bottom z-50 transition-opacity duration-300"
+           data-controller="toast">
+        <% if flash[:notice].present? %>
+          <div role="status" class="alert alert-success">
+            <span><%= flash[:notice] %></span>
+          </div>
+        <% end %>
+
+        <% if flash[:alert].present? %>
+          <div role="alert" class="alert alert-error">
+            <span><%= flash[:alert] %></span>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
   </body>
 </html>
