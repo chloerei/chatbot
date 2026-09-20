@@ -1,0 +1,13 @@
+# Chats resolve RubyLLM.config.default_model on save. Seeding just that row
+# keeps the registry from bulk-loading every known model into the test
+# database on each test that creates a chat.
+#
+# The table is owned by RubyLLM::ActiveRecord::Model, so we point the fixture
+# at it to get the right table name and autofilled timestamps.
+_fixture:
+  model_class: RubyLLM::ActiveRecord::Model
+
+deepseek_flash:
+  model_id: deepseek-flash
+  name: DeepSeek V4.1 Flash
+  provider: deepseek

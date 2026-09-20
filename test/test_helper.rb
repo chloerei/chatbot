@@ -1,4 +1,7 @@
 ENV["RAILS_ENV"] ||= "test"
+# Building a chat reaches the provider-backed RubyLLM chat even when no request
+# is made, so a key must be configured. A dummy value keeps the suite offline.
+ENV["DEEPSEEK_API_KEY"] ||= "test-key"
 require_relative "../config/environment"
 require "rails/test_help"
 require_relative "test_helpers/session_test_helper"
