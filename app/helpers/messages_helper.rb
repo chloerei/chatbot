@@ -1,8 +1,4 @@
 module MessagesHelper
-  def default_model_display_name
-    "Default: #{RubyLLM.models.find(RubyLLM.config.default_model).label}"
-  end
-
   def tool_result_partial(message)
     name = message.respond_to?(:parent_tool_call) ? message.parent_tool_call&.name.to_s : ""
     partial_for(prefix: "messages/tool_results", name: name)

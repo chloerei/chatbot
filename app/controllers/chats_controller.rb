@@ -7,23 +7,18 @@ class ChatsController < ApplicationController
 
   def new
     @chat = Chat.new
-    @selected_model = params[:provider] ? [ params[:provider], params[:model] ].join(":") : params[:model]
-    @chat_models = available_chat_models
   end
 
   def create
     prompt = params.dig(:chat, :prompt)
     if prompt.present?
-      provider, model = params.dig(:chat, :model).to_s.split(":", 2)
-      @chat = Chat.create!(model: model.presence, provider: provider.presence)
+      @chat = Current.user.chats.create!
       ChatResponseJob.perform_later(@chat.id, prompt)
 
       redirect_to @chat, notice: "Chat was successfully created."
     else
       @chat = Chat.new
       @chat.errors.add(:prompt, "can't be blank")
-      @selected_model = params.dig(:chat, :model)
-      @chat_models = available_chat_models
 
       render :new, status: :unprocessable_content
     end
