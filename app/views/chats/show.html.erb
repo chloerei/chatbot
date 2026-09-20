@@ -33,12 +33,6 @@
       max width and stays the Turbo Stream append target. %>
   <div class="min-h-0 grow flex flex-col-reverse overflow-y-auto">
     <div id="messages" class="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-      <% if notice.present? %>
-        <div role="alert" class="alert alert-success py-2 text-sm">
-          <span><%= notice %></span>
-        </div>
-      <% end %>
-
       <% @chat.messages.each do |message| %>
         <%= render message %>
       <% end %>

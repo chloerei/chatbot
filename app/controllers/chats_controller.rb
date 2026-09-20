@@ -21,7 +21,7 @@ class ChatsController < ApplicationController
       @chat.ask_later(content)
       ChatResponseJob.perform_later(@chat)
 
-      redirect_to @chat, notice: "Chat was successfully created."
+      redirect_to @chat
     else
       @message = Message.new
       @message.errors.add(:content, "can't be blank")
