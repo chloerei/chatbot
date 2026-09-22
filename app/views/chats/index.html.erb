@@ -3,9 +3,25 @@
 
   <%# The list is always present so Turbo Stream broadcasts have a stable target.
       The placeholder is toggled purely in CSS: it only shows while it is the sole child. %>
-  <ul id="chats" class="space-y-1" data-controller="chats-list" data-chats-list-current-class="text-primary bg-primary/10">
-    <li class="hidden px-3 py-2 text-sm opacity-50 only:block">No chats yet</li>
+  <ul id="chats" class="space-y-1"
+      data-controller="chats-list pagination"
+      data-chats-list-current-class="text-primary bg-primary/10"
+      data-pagination-auto-load-value="true">
+    <%# Only the first page renders the placeholder: later pages are spliced in
+        by the pagination controller, which would otherwise copy it into the list. %>
+    <% unless params[:before].present? %>
+      <li class="hidden px-3 py-2 text-sm opacity-50 only:block">No chats yet</li>
+    <% end %>
 
     <%= render @chats %>
+
+    <%# Newest first, so the next page holds the chats below this one and is
+        appended under them; the observer auto-loads it, and it stays a link as a
+        keyboard fallback. %>
+    <% if @pagy.next %>
+      <%= link_to "Load more", chats_path(before: @chats.last&.id),
+            data: { pagination_target: "nextLink", action: "pagination#load" },
+            class: "block px-3 py-2 text-center text-sm opacity-60 hover:opacity-100" %>
+    <% end %>
   </ul>
 <% end %>

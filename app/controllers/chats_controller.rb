@@ -5,7 +5,17 @@ class ChatsController < ApplicationController
 
   # Feeds the drawer's :chats_sidebar turbo frame, so it never renders the layout.
   def index
-    @chats = Current.user.chats.order(created_at: :desc)
+    # Newest first (`reorder`, so the association's ascending default is
+    # replaced). Older pages step back from the last chat shown, not from a page
+    # number, so a chat created mid-scroll cannot make two pages overlap.
+    scope = Current.user.chats.reorder(id: :desc)
+
+    cursor = params[:before].to_s.to_i
+    scope = scope.where(id: ...cursor) if cursor.positive?
+
+    # :countless fetches one row past the limit instead of counting a total we
+    # never show.
+    @pagy, @chats = pagy(:countless, scope)
 
     render layout: false
   end

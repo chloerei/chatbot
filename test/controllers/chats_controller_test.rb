@@ -1,6 +1,9 @@
 require "test_helper"
 
 class ChatsControllerTest < ActionDispatch::IntegrationTest
+  # The page size the app configures in config/initializers/pagy.rb.
+  PAGE_SIZE = Pagy::OPTIONS.fetch(:limit)
+
   setup do
     @user = users(:one)
     sign_in_as @user
@@ -12,6 +15,37 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     get chats_path
 
     assert_response :success
+  end
+
+  test "index renders the newest page and links to the page below it" do
+    # One chat past the page size, so a page is left below.
+    chats = Array.new(PAGE_SIZE + 1) { @user.chats.create! }
+    # This page's oldest chat is the cursor for the next one.
+    cursor = chats[1]
+
+    get chats_path
+
+    assert_response :success
+    # The hooks the pagination controller reads off the list's own id.
+    assert_select "#chats[data-controller~=pagination][data-pagination-auto-load-value=true]"
+    assert_select "##{dom_id(chats.last)}"
+    assert_select "##{dom_id(chats.first)}", count: 0
+    assert_select "a[data-pagination-target=nextLink][href=?]", chats_path(before: cursor.id)
+  end
+
+  test "index loads the chats older than the given cursor" do
+    chats = Array.new(PAGE_SIZE + 2) { @user.chats.create! }
+    cursor = chats[2]
+
+    get chats_path(before: cursor.id)
+
+    assert_response :success
+    assert_select "##{dom_id(chats[0])}"
+    assert_select "##{dom_id(chats[1])}"
+    assert_select "##{dom_id(cursor)}", count: 0
+    assert_select "##{dom_id(chats.last)}", count: 0
+    # The placeholder belongs to the first page only; later pages are spliced in.
+    assert_select "li", text: "No chats yet", count: 0
   end
 
   test "new" do
@@ -66,8 +100,8 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
 
   test "show renders the newest page and links to the page above it" do
     chat = @user.chats.create!
-    # One message past the default page size, so a page is left above.
-    messages = Array.new(Pagy::DEFAULT[:limit] + 1) { |i| chat.messages.create!(role: "user", content: "message #{i}") }
+    # One message past the page size, so a page is left above.
+    messages = Array.new(PAGE_SIZE + 1) { |i| chat.messages.create!(role: "user", content: "message #{i}") }
     # This page's oldest message is the cursor for the next one.
     cursor = messages[1]
 
@@ -83,7 +117,7 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
 
   test "show loads the messages older than the given cursor" do
     chat = @user.chats.create!
-    messages = Array.new(Pagy::DEFAULT[:limit] + 2) { |i| chat.messages.create!(role: "user", content: "message #{i}") }
+    messages = Array.new(PAGE_SIZE + 2) { |i| chat.messages.create!(role: "user", content: "message #{i}") }
     # This page's oldest message is the cursor for the next one.
     cursor = messages[2]
 
