@@ -27,7 +27,7 @@ class ChatsController < ApplicationController
   def create
     content = params.dig(:message, :content)
     if content.present?
-      @chat = Current.user.chats.create!
+      @chat = ChatAgent.create!(user: Current.user)
       @chat.ask_later(content)
       ChatResponseJob.perform_later(@chat)
       ChatTitleJob.perform_later(@chat)

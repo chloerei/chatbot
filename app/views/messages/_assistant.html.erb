@@ -1,5 +1,5 @@
 <% assistant ||= local_assigns[:message] %>
 <%# Borderless and backgroundless so consecutive messages read as one column. %>
 <div id="message_<%= assistant.id %>">
-  <div id="message_<%= assistant.id %>_content" class="whitespace-pre-wrap break-words leading-relaxed"><%= assistant.content %></div>
+  <div id="message_<%= assistant.id %>_content" class="whitespace-pre-wrap wrap-break-word leading-relaxed"><%= assistant.content %></div>
 </div>

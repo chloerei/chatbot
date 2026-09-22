@@ -1,6 +1,8 @@
 class ChatResponseJob < ApplicationJob
   def perform(chat)
-    chat.complete do |chunk|
+    chat_agent = ChatAgent.new(chat: chat)
+
+    chat_agent.complete do |chunk|
       if chunk.content && !chunk.content.empty?
         message = chat.messages.last
         message.broadcast_append_chunk(chunk.content)

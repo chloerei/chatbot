@@ -2,6 +2,6 @@
 <%# Right-aligned primary bubble, like other chat UIs. %>
 <div id="message_<%= user.id %>" class="flex justify-end">
   <div class="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2 text-primary-content">
-    <div id="message_<%= user.id %>_content" class="whitespace-pre-wrap break-words"><%= user.content %></div>
+    <div id="message_<%= user.id %>_content" class="whitespace-pre-wrap wrap-break-word"><%= user.content %></div>
   </div>
 </div>

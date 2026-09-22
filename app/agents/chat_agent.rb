@@ -1,0 +1,5 @@
+class ChatAgent < RubyLLM::Agent
+  # Change `Chat` to your app's chat model for Rails persistence.
+  # Remove this line to skip persistence and use plain RubyLLM chats.
+  chat_model Chat
+end
