@@ -3,7 +3,7 @@ class ChatsController < ApplicationController
 
   before_action :set_chat, only: [ :show, :destroy ]
 
-  # Feeds the drawer's :chats_sidebar turbo frame, so it never renders the layout.
+  # Feeds the drawer's :chats_list turbo frame, so it never renders the layout.
   def index
     # Newest first (`reorder`, so the association's ascending default is
     # replaced). Older pages step back from the last chat shown, not from a page

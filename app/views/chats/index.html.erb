@@ -1,5 +1,5 @@
-<%= turbo_frame_tag :chats_sidebar do %>
-  <h2 class="px-3 py-2 text-xs font-semibold uppercase tracking-wide opacity-50">Chats</h2>
+<%= turbo_frame_tag :chats_list do %>
+  <h2 class="px-3 py-2 text-xs font-semibold tracking-wide opacity-50">Chats</h2>
 
   <%# The list is always present so Turbo Stream broadcasts have a stable target.
       The placeholder is toggled purely in CSS: it only shows while it is the sole child. %>
