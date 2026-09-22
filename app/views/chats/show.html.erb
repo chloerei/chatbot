@@ -32,12 +32,14 @@
   <%# The scroll container spans the full width; the message list keeps its own
       max width and stays the Turbo Stream append target. %>
   <div class="min-h-0 grow flex flex-col-reverse overflow-y-auto">
+    <div class="sticky bottom-0">
+      <%= render "messages/form", message: @message, url: [ @chat, @message ] %>
+    </div>
+
     <div id="messages" class="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
       <% @chat.messages.each do |message| %>
         <%= render message %>
       <% end %>
     </div>
   </div>
-
-  <%= render "messages/form", message: @message, url: [ @chat, @message ] %>
 </div>
