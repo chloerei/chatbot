@@ -7,7 +7,7 @@ class Chat < ApplicationRecord
   # newest first, so new records are prepended to the "chats" target.
   broadcasts_to ->(chat) { chat.user }, inserts_by: :prepend
 
-  def title
-    messages.first&.content.presence || "Chat ##{id}"
+  def display_title
+    title.presence || "Untitled"
   end
 end

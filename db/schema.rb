@@ -43,6 +43,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_130535) do
     t.boolean "cancelled", default: false, null: false
     t.datetime "created_at", null: false
     t.bigint "ruby_llm_model_id", null: false
+    t.string "title"
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
     t.index ["ruby_llm_model_id"], name: "index_chats_on_ruby_llm_model_id"

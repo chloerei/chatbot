@@ -30,6 +30,7 @@ class ChatsController < ApplicationController
       @chat = Current.user.chats.create!
       @chat.ask_later(content)
       ChatResponseJob.perform_later(@chat)
+      ChatTitleJob.perform_later(@chat)
 
       redirect_to @chat
     else

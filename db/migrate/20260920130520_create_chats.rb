@@ -4,6 +4,7 @@ class CreateChats < ActiveRecord::Migration[8.1]
       t.references :user, null: false, foreign_key: true
       t.references :ruby_llm_model, null: false, foreign_key: { to_table: :ruby_llm_models }, type: :bigint
       t.boolean :cancelled, null: false, default: false
+      t.string :title
       t.timestamps
     end
   end

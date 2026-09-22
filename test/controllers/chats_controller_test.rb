@@ -69,12 +69,13 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Hello there", message.content
 
     assert_enqueued_with job: ChatResponseJob, args: [ chat ]
+    assert_enqueued_with job: ChatTitleJob, args: [ chat ]
     assert_redirected_to chat_path(chat)
   end
 
   test "create without a message does not start a chat" do
     assert_no_difference -> { Chat.count } do
-      assert_no_enqueued_jobs only: ChatResponseJob do
+      assert_no_enqueued_jobs only: [ ChatResponseJob, ChatTitleJob ] do
         post chats_path, params: { message: { content: "" } }
       end
     end
