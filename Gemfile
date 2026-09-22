@@ -43,6 +43,10 @@ gem "image_processing", "~> 1.2"
 
 gem "ruby_llm", "~> 2.0.0"
 
+# Paginate the messages loaded into a chat as the reader scrolls back
+# through the conversation [https://github.com/ddnexus/pagy]
+gem "pagy", "~> 43.6"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

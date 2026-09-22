@@ -36,7 +36,7 @@ class MessagesControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    assert_response :unprocessable_content
+    assert_redirected_to chat_path(@chat)
   end
 
   test "create without content responds to turbo_stream" do

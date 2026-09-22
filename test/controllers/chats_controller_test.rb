@@ -64,6 +64,52 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "show renders the newest page and links to the page above it" do
+    chat = @user.chats.create!
+    # One message past the default page size, so a page is left above.
+    messages = Array.new(Pagy::DEFAULT[:limit] + 1) { |i| chat.messages.create!(role: "user", content: "message #{i}") }
+    # This page's oldest message is the cursor for the next one.
+    cursor = messages[1]
+
+    get chat_path(chat)
+
+    assert_response :success
+    # The hooks the pagination controller reads off the list's own id.
+    assert_select "#messages[data-controller=pagination][data-pagination-auto-load-value=true]"
+    assert_select "#message_#{messages.last.id}"
+    assert_select "#message_#{messages.first.id}", count: 0
+    assert_select "a[data-pagination-target=nextLink][href=?]", chat_path(chat, before: cursor.id)
+  end
+
+  test "show loads the messages older than the given cursor" do
+    chat = @user.chats.create!
+    messages = Array.new(Pagy::DEFAULT[:limit] + 2) { |i| chat.messages.create!(role: "user", content: "message #{i}") }
+    # This page's oldest message is the cursor for the next one.
+    cursor = messages[2]
+
+    get chat_path(chat, before: cursor.id)
+
+    assert_response :success
+    assert_select "#message_#{messages[0].id}"
+    assert_select "#message_#{messages[1].id}"
+    assert_select "#message_#{cursor.id}", count: 0
+    assert_select "#message_#{messages.last.id}", count: 0
+  end
+
+  test "show renders messages of every role" do
+    chat = @user.chats.create!
+    user = chat.messages.create!(role: "user", content: "hello")
+    assistant = chat.messages.create!(role: "assistant", content: "hi there")
+    system = chat.messages.create!(role: "system", content: "be brief")
+
+    get chat_path(chat)
+
+    assert_response :success
+    assert_select "#message_#{user.id}"
+    assert_select "#message_#{assistant.id}"
+    assert_select "#message_#{system.id}"
+  end
+
   test "destroy from a chat page redirects to the new chat page" do
     chat = @user.chats.create!
 

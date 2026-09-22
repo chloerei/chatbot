@@ -19,7 +19,9 @@ class MessagesController < ApplicationController
 
       respond_to do |format|
         format.turbo_stream { render :create, status: :unprocessable_content }
-        format.html { render "chats/show", status: :unprocessable_content }
+        # The chat page belongs to ChatsController#show, so hand this back to it
+        # rather than rebuilding its paginated message list here.
+        format.html { redirect_to @chat, alert: @message.errors.full_messages.to_sentence }
       end
     end
   end
