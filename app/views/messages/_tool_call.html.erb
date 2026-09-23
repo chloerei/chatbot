@@ -1,0 +1,5 @@
+<%# Renders one tool call's card, dispatching on the tool's name so a tool with a
+    card of its own is used and anything else falls back to the shared default.
+    Shared by the assistant partial and the broadcast that re-renders the card
+    once the call's result lands, so both times pick the same card. %>
+<%= render tool_call_partial(tool_call), tool_call: tool_call %>

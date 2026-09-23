@@ -13,7 +13,7 @@ class MessageTest < ActiveSupport::TestCase
     assert_equal "messages", append["target"]
   end
 
-  test "a tool result replaces the tool call output instead of appending a message" do
+  test "a tool result fills in its call's card instead of appending a message" do
     assistant = @chat.messages.create!(role: "assistant", content: "")
     tool_call = assistant.ruby_llm_tool_calls.create!(
       tool_call_id: "call_1", name: "bash", arguments: { "command" => "ls" }
@@ -28,10 +28,10 @@ class MessageTest < ActiveSupport::TestCase
 
     assert_includes actions, [ "remove", "message_#{result.id}" ]
     replacement = streams.find do |stream|
-      stream["action"] == "replace" && stream["target"] == "message_tool_call_call_1_output"
+      stream["action"] == "replace" && stream["target"] == "message_tool_call_call_1"
     end
 
-    assert replacement, "expected the tool call output to be replaced, got #{actions.inspect}"
+    assert replacement, "expected the tool card to be re-rendered with the result, got #{actions.inspect}"
     assert_includes replacement.to_html, "file1"
   end
 

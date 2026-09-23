@@ -103,9 +103,12 @@ class Message < ApplicationRecord
     call = ruby_llm_parent_tool_call
     return unless call
 
+    # Re-render the whole card rather than just its output region: the summary
+    # carries a spinner until the call has a result, so it has to be redrawn when
+    # one lands.
     broadcast_replace_to chat,
-      target: self.class.tool_output_dom_id(call.tool_call_id),
-      partial: "messages/tool_call_output",
+      target: self.class.tool_call_dom_id(call.tool_call_id),
+      partial: "messages/tool_call",
       locals: { tool_call: call }
   end
 end
