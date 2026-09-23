@@ -10,6 +10,13 @@ class Message < ApplicationRecord
   # call they answer, so they are left out when messages are listed.
   scope :conversation, -> { where.not(role: "tool") }
 
+  # A message carries its tool calls inside it, so the role alone picks the
+  # template: the assistant one draws the cards itself. Overrides the gem, which
+  # sends tool calls to a template of their own.
+  def to_partial_path
+    "messages/#{role.to_s.presence || "assistant"}"
+  end
+
   # The tool call card renders one block per call. The card, the result replace
   # and the streamed output append all target these ids, so they live here.
   def self.tool_call_dom_id(tool_call_id)

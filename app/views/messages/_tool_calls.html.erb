@@ -1,6 +1,0 @@
-<% message = local_assigns[:message] || tool_calls %>
-<div id="message_<%= message.id %>" class="space-y-2">
-  <% message.ruby_llm_tool_calls.each do |tool_call| %>
-    <%= render tool_call_partial(tool_call), tool_call: tool_call %>
-  <% end %>
-</div>

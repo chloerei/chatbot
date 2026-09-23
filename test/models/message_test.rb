@@ -43,7 +43,7 @@ class MessageTest < ActiveSupport::TestCase
     result = @chat.messages.create!(role: "tool", content: "file1\nfile2")
     tool_call.update!(result: result)
 
-    html = ApplicationController.render(partial: "messages/tool_calls", locals: { message: assistant })
+    html = ApplicationController.render(partial: "messages/assistant", locals: { message: assistant })
 
     assert_includes html, "message_tool_call_call_1_output"
     assert_includes html, "ls"
@@ -54,7 +54,7 @@ class MessageTest < ActiveSupport::TestCase
     assistant = @chat.messages.create!(role: "assistant", content: "")
     assistant.ruby_llm_tool_calls.create!(tool_call_id: "call_1", name: "bash", arguments: { "command" => "ls" })
 
-    html = ApplicationController.render(partial: "messages/tool_calls", locals: { message: assistant })
+    html = ApplicationController.render(partial: "messages/assistant", locals: { message: assistant })
 
     assert_includes html, "message_tool_call_call_1_output"
     assert_includes html, "ls"
