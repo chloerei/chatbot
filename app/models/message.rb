@@ -33,6 +33,22 @@ class Message < ApplicationRecord
       content: ERB::Util.html_escape(content.to_s)
   end
 
+  # Reasoning streams into a region of its own above the answer. That region is
+  # inserted the first time the model thinks rather than rendered up front, so a
+  # model that never reasons leaves no empty box behind.
+  def broadcast_insert_thinking
+    broadcast_prepend_to chat,
+      target: "message_#{id}",
+      partial: "messages/thinking",
+      locals: { message: self }
+  end
+
+  def broadcast_append_thinking_chunk(content)
+    broadcast_append_to chat,
+      target: "message_#{id}_thinking_content",
+      content: ERB::Util.html_escape(content.to_s)
+  end
+
   # Tool results are plumbing, not conversation: they render inside the tool
   # call they answer, never as a message of their own.
   def tool_message?

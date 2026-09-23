@@ -1,0 +1,9 @@
+<%# locals: (message:) %>
+<%# The model's reasoning, shown above its answer. The native details element
+    folds it, so collapsing needs no JavaScript. The job inserts this region
+    when reasoning starts and appends to its content; the final re-render fills
+    the same ids from the persisted text. %>
+<details id="message_<%= message.id %>_thinking" class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+  <summary class="cursor-pointer select-none text-xs font-medium uppercase tracking-wide text-gray-500">Thinking</summary>
+  <div id="message_<%= message.id %>_thinking_content" class="mt-2 whitespace-pre-wrap wrap-break-word leading-relaxed"><%= message.thinking&.text %></div>
+</details>

@@ -59,4 +59,22 @@ class MessageTest < ActiveSupport::TestCase
     assert_includes html, "message_tool_call_call_1_output"
     assert_includes html, "ls"
   end
+
+  test "the assistant partial shows the model's reasoning above its answer" do
+    assistant = @chat.messages.create!(role: "assistant", content: "Forty-two", thinking_text: "Six times seven.")
+
+    html = ApplicationController.render(partial: "messages/assistant", locals: { message: assistant })
+
+    assert_includes html, "message_#{assistant.id}_thinking"
+    assert_includes html, "Six times seven."
+    assert_operator html.index("message_#{assistant.id}_thinking"), :<, html.index("message_#{assistant.id}_content")
+  end
+
+  test "the assistant partial omits the thinking region when there is none" do
+    assistant = @chat.messages.create!(role: "assistant", content: "Forty-two")
+
+    html = ApplicationController.render(partial: "messages/assistant", locals: { message: assistant })
+
+    refute_includes html, "message_#{assistant.id}_thinking"
+  end
 end

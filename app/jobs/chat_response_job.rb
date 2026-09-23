@@ -5,22 +5,25 @@ class ChatResponseJob < ApplicationJob
   BROADCAST_INTERVAL = 0.1 # seconds
 
   def perform(chat)
-    @buffer = +""
+    @content = +""
+    @thinking = +""
+    @thinking_inserted = false
     @message = nil
     @flushed_at = clock
 
     ChatAgent.new(chat: chat).complete do |chunk|
-      next if chunk.content.nil? || chunk.content.empty?
-
       # The turn can hand off to a new message (a tool result, then the next
       # assistant turn), so flush the pending text before retargeting.
       latest = chat.messages.last
       if latest != @message
         flush
         @message = latest
+        @thinking_inserted = false
       end
 
-      @buffer << chunk.content
+      append_thinking chunk.thinking
+      append_content chunk.content
+
       flush if clock - @flushed_at >= BROADCAST_INTERVAL
     end
 
@@ -29,14 +32,45 @@ class ChatResponseJob < ApplicationJob
 
   private
 
+  def append_thinking(thinking)
+    text = thinking&.text
+    @thinking << text if text.present?
+  end
+
+  def append_content(content)
+    @content << content if content.present?
+  end
+
   # Hand whatever has piled up to the message it belongs to. Runs when the
   # interval elapses and once more when the stream ends, so no tail is lost.
   def flush
-    return if @buffer.empty?
+    return if @thinking.empty? && @content.empty?
 
-    @message.broadcast_append_chunk(@buffer)
-    @buffer.clear
+    flush_thinking
+    flush_content
     @flushed_at = clock
+  end
+
+  # Reasoning arrives before the answer and gets a region of its own. The region
+  # is created on the first fragment, so a turn that never thinks leaves no
+  # empty box behind.
+  def flush_thinking
+    return if @thinking.empty?
+
+    unless @thinking_inserted
+      @message.broadcast_insert_thinking
+      @thinking_inserted = true
+    end
+
+    @message.broadcast_append_thinking_chunk(@thinking)
+    @thinking.clear
+  end
+
+  def flush_content
+    return if @content.empty?
+
+    @message.broadcast_append_chunk(@content)
+    @content.clear
   end
 
   # Monotonic, so a wall-clock jump mid-stream cannot stall or hurry the throttle.
