@@ -3,10 +3,10 @@
     replace. %>
 <% error_message = tool_result&.tool_error_message %>
 <% if error_message.present? %>
-  <div id="<%= tool_output_dom_id(tool_call) %>" class="space-y-1 text-sm text-error">
+  <div id="<%= tool_output_dom_id(tool_call) %>" class="space-y-1 text-sm text-error rounded-md bg-gray-100 p-2">
     <div class="font-medium">Tool result error</div>
     <pre class="whitespace-pre-wrap overflow-x-auto"><%= error_message %></pre>
   </div>
 <% else %>
-  <pre id="<%= tool_output_dom_id(tool_call) %>" class="whitespace-pre-wrap text-sm overflow-x-auto"><%= tool_result&.content %></pre>
+  <pre id="<%= tool_output_dom_id(tool_call) %>" class="whitespace-pre-wrap text-sm overflow-x-auto rounded-md bg-gray-100 p-2"><%= tool_result&.content %></pre>
 <% end %>

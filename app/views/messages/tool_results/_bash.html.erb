@@ -1,4 +1,4 @@
 <%# The output region carries the id the bash tool streams chunks into while the
     command runs. The finished output is rendered the same way, so the replace
     that ends the stream looks like the chunks that came before it. %>
-<pre id="<%= tool_output_dom_id(tool_call) %>" class="whitespace-pre-wrap text-gray-700 text-sm overflow-x-auto"><%= tool_result&.content %></pre>
+<pre id="<%= tool_output_dom_id(tool_call) %>" class="whitespace-pre-wrap text-gray-700 text-sm overflow-x-auto rounded-md bg-gray-100 p-2"><%= tool_result&.content %></pre>
