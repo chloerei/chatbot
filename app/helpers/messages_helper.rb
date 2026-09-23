@@ -12,6 +12,17 @@ module MessagesHelper
     partial_for(prefix: "messages/tool_results", name: tool_call.name)
   end
 
+  # The ids the tool call card and the broadcasts that update it share. Kept in
+  # one place on the model so the card, the result replace and the streamed
+  # output append cannot drift apart.
+  def tool_call_dom_id(tool_call)
+    Message.tool_call_dom_id(tool_call.tool_call_id)
+  end
+
+  def tool_output_dom_id(tool_call)
+    Message.tool_output_dom_id(tool_call.tool_call_id)
+  end
+
   private
 
   def partial_for(prefix:, name:)

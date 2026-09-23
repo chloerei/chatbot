@@ -10,6 +10,16 @@ class Message < ApplicationRecord
   # call they answer, so they are left out when messages are listed.
   scope :conversation, -> { where.not(role: "tool") }
 
+  # The tool call card renders one block per call. The card, the result replace
+  # and the streamed output append all target these ids, so they live here.
+  def self.tool_call_dom_id(tool_call_id)
+    "message_tool_call_#{tool_call_id}"
+  end
+
+  def self.tool_output_dom_id(tool_call_id)
+    "#{tool_call_dom_id(tool_call_id)}_output"
+  end
+
   def broadcast_append_chunk(content)
     broadcast_append_to chat,
       target: "message_#{id}_content",
@@ -60,7 +70,7 @@ class Message < ApplicationRecord
     return unless call
 
     broadcast_replace_to chat,
-      target: "message_tool_call_#{call.tool_call_id}_output",
+      target: self.class.tool_output_dom_id(call.tool_call_id),
       partial: "messages/tool_call_output",
       locals: { tool_call: call }
   end

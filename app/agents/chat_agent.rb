@@ -3,5 +3,5 @@ class ChatAgent < RubyLLM::Agent
   # Remove this line to skip persistence and use plain RubyLLM chats.
   chat_model Chat
 
-  tools BashTool
+  tools { [ BashTool.new(chat: chat) ] }
 end

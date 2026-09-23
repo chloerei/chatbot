@@ -1,9 +1,4 @@
-<% error_message = tool_result.tool_error_message %>
-<% if error_message.present? %>
-  <div class="space-y-1 text-sm text-error">
-    <div class="font-medium">Bash error</div>
-    <pre class="whitespace-pre-wrap overflow-x-auto"><%= error_message %></pre>
-  </div>
-<% else %>
-  <pre class="whitespace-pre-wrap text-gray-700 text-sm overflow-x-auto"><%= tool_result.content.presence || "(no output)" %></pre>
-<% end %>
+<%# The output region carries the id the bash tool streams chunks into while the
+    command runs. The finished output is rendered the same way, so the replace
+    that ends the stream looks like the chunks that came before it. %>
+<pre id="<%= tool_output_dom_id(tool_call) %>" class="whitespace-pre-wrap text-gray-700 text-sm overflow-x-auto"><%= tool_result&.content %></pre>

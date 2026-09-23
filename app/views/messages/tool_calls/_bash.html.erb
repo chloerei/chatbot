@@ -1,4 +1,4 @@
-<div id="message_tool_call_<%= tool_call.tool_call_id %>" class="w-full sm:w-auto my-5 space-y-3 rounded-md px-3 py-2 bg-gray-50 border border-gray-200">
+<div id="<%= tool_call_dom_id(tool_call) %>" class="w-full sm:w-auto my-5 space-y-3 rounded-md px-3 py-2 bg-gray-50 border border-gray-200">
   <div>
     <span class="inline-block rounded px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700">
       Bash
@@ -12,9 +12,7 @@
 
   <div class="space-y-1">
     <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Output</div>
-    <div id="message_tool_call_<%= tool_call.tool_call_id %>_output">
-      <%= render "messages/tool_call_output", tool_call: tool_call %>
-    </div>
+    <%= render "messages/tool_call_output", tool_call: tool_call %>
   </div>
 
   <div>

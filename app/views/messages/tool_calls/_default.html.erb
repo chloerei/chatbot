@@ -1,4 +1,4 @@
-<div id="message_tool_call_<%= tool_call.tool_call_id %>" class="space-y-1 text-sm opacity-70">
+<div id="<%= tool_call_dom_id(tool_call) %>" class="space-y-1 text-sm opacity-70">
   <div class="font-medium">Tool call · <%= tool_call.name %></div>
 
   <div class="space-y-1">
@@ -8,8 +8,6 @@
 
   <div class="space-y-1">
     <div class="text-xs font-medium uppercase tracking-wide opacity-60">Output</div>
-    <div id="message_tool_call_<%= tool_call.tool_call_id %>_output">
-      <%= render "messages/tool_call_output", tool_call: tool_call %>
-    </div>
+    <%= render "messages/tool_call_output", tool_call: tool_call %>
   </div>
 </div>

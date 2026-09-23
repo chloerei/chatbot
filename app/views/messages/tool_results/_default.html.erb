@@ -1,9 +1,12 @@
-<% error_message = tool_result.tool_error_message %>
+<%# The fallback result partial. It still owns the output region's id so the
+    result broadcast, which targets that id for every tool, has something to
+    replace. %>
+<% error_message = tool_result&.tool_error_message %>
 <% if error_message.present? %>
-  <div class="space-y-1 text-sm text-error">
+  <div id="<%= tool_output_dom_id(tool_call) %>" class="space-y-1 text-sm text-error">
     <div class="font-medium">Tool result error</div>
     <pre class="whitespace-pre-wrap overflow-x-auto"><%= error_message %></pre>
   </div>
 <% else %>
-  <pre class="whitespace-pre-wrap text-sm overflow-x-auto"><%= tool_result.content.presence || "(no output)" %></pre>
+  <pre id="<%= tool_output_dom_id(tool_call) %>" class="whitespace-pre-wrap text-sm overflow-x-auto"><%= tool_result&.content %></pre>
 <% end %>

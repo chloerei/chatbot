@@ -5,14 +5,23 @@ class BashTool < RubyLLM::Tool
 
   parameter :command, type: String, description: "The bash command to execute."
 
-  def execute(command:)
-    # Passing a single string lets Ruby route the command through the shell
-    # when it contains metacharacters, so pipes, redirects and globs still
-    # work.
-    output, status = Open3.capture2e(command)
+  # The chat streams the command's output into the call's output region as it
+  # runs, so the card fills in before the call finishes.
+  def initialize(chat:)
+    @chat = chat
+  end
 
-    result = { output: output }
-    result[:error] = "Command exited with status #{status.exitstatus}" unless status.success?
-    result
+  def execute(command:, tool_call: nil)
+    output = +""
+
+    Open3.popen2e(command) do |_stdin, stream, wait_thread|
+      stream.each do |chunk|
+        output << chunk
+        @chat.broadcast_tool_output(tool_call, chunk) if tool_call
+      end
+      wait_thread.value
+    end
+
+    output
   end
 end
