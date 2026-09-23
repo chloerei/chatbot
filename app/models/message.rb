@@ -34,19 +34,30 @@ class Message < ApplicationRecord
   end
 
   # Reasoning streams into a region of its own above the answer. That region is
-  # inserted the first time the model thinks rather than rendered up front, so a
-  # model that never reasons leaves no empty box behind.
-  def broadcast_insert_thinking
+  # inserted on its first fragment rather than rendered up front, so a model that
+  # never reasons leaves no empty box behind. It normally goes in with the
+  # spinner icon; +streaming+ false inserts it already settled.
+  def broadcast_insert_thinking(text, streaming: true)
     broadcast_prepend_to chat,
       target: "message_#{id}",
       partial: "messages/thinking",
-      locals: { message: self }
+      locals: { message: self, text: text, streaming: streaming }
   end
 
   def broadcast_append_thinking_chunk(content)
     broadcast_append_to chat,
       target: "message_#{id}_thinking_content",
       content: ERB::Util.html_escape(content.to_s)
+  end
+
+  # Re-renders the whole region, settling the spinner into the bulb. +text+ is
+  # the reasoning accumulated so far, passed in because the record does not carry
+  # it until the turn is saved.
+  def broadcast_replace_thinking(text)
+    broadcast_replace_to chat,
+      target: "message_#{id}_thinking",
+      partial: "messages/thinking",
+      locals: { message: self, text: text, streaming: false }
   end
 
   # Tool results are plumbing, not conversation: they render inside the tool

@@ -6,7 +6,7 @@ class ChatResponseJobTest < ActiveJob::TestCase
     @assistant = @chat.messages.create!(role: "assistant", content: "")
   end
 
-  test "streams reasoning into its own region, inserted before the answer" do
+  test "streams reasoning into its own region above the answer" do
     chunks = [
       chunk(thinking: "Six times "),
       chunk(thinking: "seven.", content: "Forty-two")
@@ -16,21 +16,23 @@ class ChatResponseJobTest < ActiveJob::TestCase
       with_chunks(chunks) { ChatResponseJob.perform_now(@chat) }
     end
 
-    insert = streams.find { |stream| stream["action"] == "prepend" && stream["target"] == "message_#{@assistant.id}" }
-    assert insert, "expected the reasoning region to be inserted, got #{streams.map { |s| [ s['action'], s['target'] ] }.inspect}"
-
-    thinking = streams.find { |s| s["action"] == "append" && s["target"] == "message_#{@assistant.id}_thinking_content" }
-    assert thinking, "expected reasoning to be appended to its region"
-    assert_includes thinking.at("template").inner_html, "Six times seven."
-
-    # The region is the append target, so it has to exist first.
-    order = streams.map { |stream| [ stream["action"], stream["target"] ] }
-    assert_operator order.index([ "prepend", "message_#{@assistant.id}" ]), :<,
-      order.index([ "append", "message_#{@assistant.id}_thinking_content" ]),
-      "expected the region to be inserted before text is appended into it"
+    region = streams.find { |s| s["action"] == "prepend" && s["target"] == "message_#{@assistant.id}" }
+    assert region, "expected the reasoning region, got #{targets(streams)}"
+    assert_includes region.at("template").inner_html, "Six times seven."
 
     content = streams.find { |s| s["action"] == "append" && s["target"] == "message_#{@assistant.id}_content" }
     assert_includes content.at("template").inner_html, "Forty-two"
+  end
+
+  test "does not settle the reasoning region until the answer starts" do
+    streams = capture_turbo_stream_broadcasts(@chat) do
+      with_chunks([ chunk(thinking: "Six times seven.") ]) { ChatResponseJob.perform_now(@chat) }
+    end
+
+    assert streams.any? { |s| s["action"] == "prepend" && s["target"] == "message_#{@assistant.id}" },
+      "expected the reasoning region, got #{targets(streams)}"
+    refute streams.any? { |s| s["action"] == "replace" && s["target"] == "message_#{@assistant.id}_thinking" },
+      "expected reasoning to stay unsettled until the answer starts"
   end
 
   test "leaves no reasoning region when the model does not think" do
@@ -39,7 +41,7 @@ class ChatResponseJobTest < ActiveJob::TestCase
     end
 
     refute streams.any? { |stream| stream["target"] == "message_#{@assistant.id}" },
-      "expected no reasoning region, got #{streams.map { |s| [ s['action'], s['target'] ] }.inspect}"
+      "expected no reasoning region, got #{targets(streams)}"
   end
 
   private
@@ -50,6 +52,10 @@ class ChatResponseJobTest < ActiveJob::TestCase
       content: content,
       thinking: thinking && RubyLLM::Thinking.new(text: thinking)
     )
+  end
+
+  def targets(streams)
+    streams.map { |stream| [ stream["action"], stream["target"] ] }.inspect
   end
 
   # Streams +chunks+ through the job without reaching a provider.

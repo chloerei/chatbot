@@ -6,8 +6,12 @@ class ChatResponseJob < ApplicationJob
 
   def perform(chat)
     @content = +""
+    # Reasoning not yet sent, and the whole of it: the record cannot hand the
+    # text back until the turn is saved, so the job keeps its own copy.
     @thinking = +""
+    @thinking_all = +""
     @thinking_inserted = false
+    @thinking_done = false
     @message = nil
     @flushed_at = clock
 
@@ -18,11 +22,16 @@ class ChatResponseJob < ApplicationJob
       if latest != @message
         flush
         @message = latest
+        @thinking_all = +""
         @thinking_inserted = false
+        @thinking_done = false
       end
 
       append_thinking chunk.thinking
       append_content chunk.content
+
+      # The answer starting means reasoning has ended, so settle the spinner.
+      finish_thinking if chunk.content.present?
 
       flush if clock - @flushed_at >= BROADCAST_INTERVAL
     end
@@ -34,7 +43,10 @@ class ChatResponseJob < ApplicationJob
 
   def append_thinking(thinking)
     text = thinking&.text
-    @thinking << text if text.present?
+    return if text.blank?
+
+    @thinking << text
+    @thinking_all << text
   end
 
   def append_content(content)
@@ -52,18 +64,37 @@ class ChatResponseJob < ApplicationJob
   end
 
   # Reasoning arrives before the answer and gets a region of its own. The region
-  # is created on the first fragment, so a turn that never thinks leaves no
+  # is created with the first fragment, so a turn that never thinks leaves no
   # empty box behind.
   def flush_thinking
     return if @thinking.empty?
 
-    unless @thinking_inserted
-      @message.broadcast_insert_thinking
+    if @thinking_inserted
+      @message.broadcast_append_thinking_chunk(@thinking)
+    else
+      @message.broadcast_insert_thinking(@thinking)
       @thinking_inserted = true
     end
 
-    @message.broadcast_append_thinking_chunk(@thinking)
     @thinking.clear
+  end
+
+  # Reasoning ends when the answer begins. Replacing the region settles the
+  # spinner into the bulb, and the render carries the whole text, so the pending
+  # buffer is dropped rather than appended first. The region may not have reached
+  # the DOM yet, in which case it is inserted already settled.
+  def finish_thinking
+    return if @thinking_done || @thinking_all.empty?
+
+    @thinking_done = true
+    @thinking.clear
+
+    if @thinking_inserted
+      @message.broadcast_replace_thinking(@thinking_all)
+    else
+      @message.broadcast_insert_thinking(@thinking_all, streaming: false)
+      @thinking_inserted = true
+    end
   end
 
   def flush_content
