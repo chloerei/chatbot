@@ -1,8 +1,10 @@
 <% assistant ||= local_assigns[:message] %>
 <%# Borderless and backgroundless so consecutive messages read as one column.
     A message's tool calls render inside it, so the message keeps its content
-    even when the calls are broadcast. %>
-<div id="message_<%= assistant.id %>" class="space-y-2">
+    even when the calls are broadcast. Every block carries the same vertical
+    padding and the stack supplies the only gap, so the blocks stay evenly
+    spaced whatever is folded open. %>
+<div id="message_<%= assistant.id %>" class="space-y-1">
   <%# Only rendered once there is reasoning to show. While a response streams,
       the job inserts this region the first time a thinking chunk arrives; a
       model that never thinks leaves no empty box behind. %>
@@ -11,7 +13,7 @@
     <%= render "messages/thinking", message: assistant, text: thinking %>
   <% end %>
 
-  <div id="message_<%= assistant.id %>_content" class="whitespace-pre-wrap wrap-break-word leading-relaxed"><%= assistant.content %></div>
+  <div id="message_<%= assistant.id %>_content" class="whitespace-pre-wrap wrap-break-word py-1 leading-relaxed"><%= assistant.content %></div>
 
   <% assistant.ruby_llm_tool_calls.each do |tool_call| %>
     <%= render "messages/tool_call", tool_call: tool_call %>

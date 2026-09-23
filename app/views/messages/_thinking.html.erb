@@ -3,14 +3,14 @@
     by default and folds it without JavaScript; collapse-arrow draws the
     disclosure icon on the trailing edge. The summary is the leading status icon
     — a spinner while the model is still reasoning, a bulb once it has finished
-    — plus the title. Its own horizontal padding is dropped so the block lines up
-    with the answer beside it. The expanded text sits in a column that starts
-    under the title, beside a rule centred on the icon above it. The job inserts
-    this region when reasoning starts and appends to its content; once reasoning
-    ends the region is rendered settled, and the final re-render fills it from
-    the persisted text. %>
+    — plus the title. Neither the summary nor the content carries padding, so the
+    message's own stack owns every gap; the content hangs off a rule centred
+    under the icon and set one step in from the summary. The job inserts this
+    region when reasoning starts and appends to its content; once reasoning ends
+    the region is rendered settled, and the final re-render fills it from the
+    persisted text. %>
 <details id="message_<%= message.id %>_thinking" class="collapse collapse-arrow">
-  <summary class="collapse-title px-0 text-sm font-medium text-base-content/60">
+  <summary class="collapse-title px-0 py-1 text-sm font-medium text-base-content/60 transition-colors hover:text-base-content/80">
     <span class="flex items-center gap-2">
       <%# Decorative, so hidden from assistive tech; the title carries the meaning. %>
       <% if streaming %>
@@ -27,11 +27,15 @@
     </span>
   </summary>
   <%# The rule column is the icon's width with the rule centred in it, so it hangs
-      straight below the icon; the text column lines up with the title beside it. %>
-  <div class="collapse-content flex gap-2 px-0">
-    <span class="flex w-4 shrink-0 justify-center">
-      <span class="w-0.5 rounded-full bg-base-300"></span>
-    </span>
-    <div id="message_<%= message.id %>_thinking_content" class="flex-1 min-w-0 whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-base-content/70"><%= text %></div>
+      straight below the icon; the text column lines up with the title beside it.
+      The wrapper's pt-2, on top of the summary's own bottom padding, is what
+      separates the body from the summary. %>
+  <div class="collapse-content px-0 pb-1">
+    <div class="flex gap-2 pt-2">
+      <span class="flex w-4 shrink-0 justify-center">
+        <span class="w-0.5 rounded-full bg-base-300"></span>
+      </span>
+      <div id="message_<%= message.id %>_thinking_content" class="flex-1 min-w-0 whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-base-content/70"><%= text %></div>
+    </div>
   </div>
 </details>

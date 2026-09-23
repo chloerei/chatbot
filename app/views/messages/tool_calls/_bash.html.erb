@@ -3,7 +3,7 @@
     because that is where the command's chunks are appended while it runs and
     where the finished result is replaced in. %>
 <details id="<%= tool_call_dom_id(tool_call) %>" class="collapse collapse-arrow">
-  <summary class="collapse-title px-0 text-sm font-medium text-base-content/60">
+  <summary class="collapse-title px-0 py-1 text-sm font-medium text-base-content/60 transition-colors hover:text-base-content/80">
     <span class="flex items-center gap-2">
       <%# A spinner while the call has no result yet, the terminal once it does.
           Decorative, so hidden from assistive tech; the name beside it carries
@@ -21,19 +21,21 @@
       <%= tool_call.name %>
     </span>
   </summary>
-  <div class="collapse-content flex gap-2 px-0">
-    <span class="flex w-4 shrink-0 justify-center">
-      <span class="w-0.5 rounded-full bg-base-300"></span>
-    </span>
-    <div class="flex-1 min-w-0 space-y-3 text-sm">
-      <div class="space-y-1">
-        <div class="text-xs font-medium uppercase tracking-wide text-base-content/50">Input</div>
-        <pre class="whitespace-pre-wrap wrap-break-word overflow-x-auto rounded-md bg-base-200 p-2"><%= tool_call.name %>(<%= tool_call.arguments.map { |k, v| "#{k}: #{v.inspect}" }.join(", ") %>)</pre>
-      </div>
+  <div class="collapse-content px-0 pb-1">
+    <div class="flex gap-2 pt-2">
+      <span class="flex w-4 shrink-0 justify-center">
+        <span class="w-0.5 rounded-full bg-base-300"></span>
+      </span>
+      <div class="flex-1 min-w-0 space-y-2 text-sm">
+        <div class="space-y-1">
+          <div class="text-xs font-medium uppercase tracking-wide text-base-content/50">Input</div>
+          <pre class="whitespace-pre-wrap wrap-break-word overflow-x-auto rounded-md bg-base-200 p-2"><%= tool_call.name %>(<%= tool_call.arguments.map { |k, v| "#{k}: #{v.inspect}" }.join(", ") %>)</pre>
+        </div>
 
-      <div class="space-y-1">
-        <div class="text-xs font-medium uppercase tracking-wide text-base-content/50">Output</div>
-        <%= render "messages/tool_call_output", tool_call: tool_call %>
+        <div class="space-y-1">
+          <div class="text-xs font-medium uppercase tracking-wide text-base-content/50">Output</div>
+          <%= render "messages/tool_call_output", tool_call: tool_call %>
+        </div>
       </div>
     </div>
   </div>
