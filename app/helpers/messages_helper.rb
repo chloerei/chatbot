@@ -1,11 +1,15 @@
 module MessagesHelper
-  def tool_result_partial(message)
-    name = message.respond_to?(:parent_tool_call) ? message.parent_tool_call&.name.to_s : ""
-    partial_for(prefix: "messages/tool_results", name: name)
+  # Renders a tool call's arguments (its input), dispatching to a per-tool
+  # partial when one exists and the shared default otherwise.
+  def tool_call_partial(tool_call)
+    partial_for(prefix: "messages/tool_calls", name: tool_call.name)
   end
 
-  def tool_call_partial(tool_call)
-    partial_for(prefix: "messages/tool_calls", name: tool_call.name.to_s)
+  # Renders a tool call's result (its output). Dispatches on the tool's name so
+  # a still-pending call and the broadcast that fills it in pick the same
+  # partial.
+  def tool_result_partial(tool_call)
+    partial_for(prefix: "messages/tool_results", name: tool_call.name)
   end
 
   private

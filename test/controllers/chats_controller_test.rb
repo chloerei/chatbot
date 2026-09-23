@@ -145,6 +145,25 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#message_#{system.id}"
   end
 
+  test "show folds a tool result into its call instead of rendering it as a message" do
+    chat = @user.chats.create!
+    assistant = chat.messages.create!(role: "assistant", content: "")
+    tool_call = assistant.ruby_llm_tool_calls.create!(
+      tool_call_id: "call_1", name: "bash", arguments: { "command" => "ls" }
+    )
+    result = chat.messages.create!(role: "tool", content: "file1")
+    tool_call.update!(result: result)
+
+    get chat_path(chat)
+
+    assert_response :success
+    # The call renders both halves; the result fills its output.
+    assert_select "#message_tool_call_call_1"
+    assert_select "#message_tool_call_call_1_output", text: /file1/
+    # The result is never a message of its own.
+    assert_select "#message_#{result.id}", count: 0
+  end
+
   test "destroy from a chat page redirects to the new chat page" do
     chat = @user.chats.create!
 

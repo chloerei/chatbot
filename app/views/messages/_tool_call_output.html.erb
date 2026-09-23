@@ -1,0 +1,9 @@
+<%# Shared by the tool call card and the broadcast that fills it in when the
+    result arrives, so both render identical output. A call without a result is
+    still running. %>
+<% tool_result = tool_call.result %>
+<% if tool_result.nil? %>
+  <div class="text-sm italic text-gray-500">Running…</div>
+<% else %>
+  <%= render tool_result_partial(tool_call), tool_result: tool_result %>
+<% end %>

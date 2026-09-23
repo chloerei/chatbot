@@ -47,7 +47,8 @@ class ChatsController < ApplicationController
     # Newest first (`reorder`, so the association's ascending default is
     # replaced). Older pages step back from the last message shown, not from a page
     # number, so messages arriving mid-scroll cannot make two pages overlap.
-    scope = @chat.messages.reorder(id: :desc)
+    # Tool results fold into their tool call's output, so they are not listed.
+    scope = @chat.messages.conversation.reorder(id: :desc)
 
     cursor = params[:before].to_s.to_i
     scope = scope.where(id: ...cursor) if cursor.positive?

@@ -1,12 +1,9 @@
-<% error_message = tool.tool_error_message %>
+<% error_message = tool_result.tool_error_message %>
 <% if error_message.present? %>
-  <%= render "messages/error",
-    message: tool,
-    title: "Tool result error",
-    error_message: error_message %>
-<% else %>
-  <div id="message_<%= tool.id %>" class="space-y-1 text-sm opacity-70">
-    <div class="font-medium">Tool result</div>
-    <pre class="overflow-x-auto whitespace-pre-wrap"><%= tool.content.presence || "(no output)" %></pre>
+  <div class="space-y-1 text-sm text-error">
+    <div class="font-medium">Tool result error</div>
+    <pre class="whitespace-pre-wrap overflow-x-auto"><%= error_message %></pre>
   </div>
+<% else %>
+  <pre class="whitespace-pre-wrap text-sm overflow-x-auto"><%= tool_result.content.presence || "(no output)" %></pre>
 <% end %>

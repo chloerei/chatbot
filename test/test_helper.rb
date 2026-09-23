@@ -4,10 +4,18 @@ ENV["RAILS_ENV"] ||= "test"
 ENV["DEEPSEEK_API_KEY"] ||= "test-key"
 require_relative "../config/environment"
 require "rails/test_help"
+require "turbo/broadcastable/test_helper"
 require_relative "test_helpers/session_test_helper"
 
 module ActiveSupport
   class TestCase
+    # Turbo includes this into ActiveSupport::TestCase only once Action Cable's
+    # :action_cable lazy-load hook fires (the first time ActionCable.server is
+    # touched), so relying on the auto-include makes tests that use
+    # `capture_turbo_stream_broadcasts` depend on which test touches it first.
+    # Include it up front so every test can rely on it.
+    include Turbo::Broadcastable::TestHelper
+
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
 
