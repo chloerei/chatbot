@@ -2,8 +2,9 @@ class Chat < ApplicationRecord
   acts_as_chat
 
   # The chat's run state, driving the composer's button: idle between turns,
-  # responding while a background response is streaming.
-  enum :status, { idle: "idle", responding: "responding" }
+  # responding while a background response is streaming. Stored as an integer so
+  # new states can be appended as the lifecycle grows.
+  enum :status, { idle: 0, responding: 1 }
 
   belongs_to :user
 
