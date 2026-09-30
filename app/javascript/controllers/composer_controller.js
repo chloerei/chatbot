@@ -19,6 +19,11 @@ export default class extends Controller {
     if (this.element.value.trim() === "") return
 
     event.preventDefault()
-    this.element.form?.requestSubmit()
+
+    const form = this.element.form
+    // Pass the submit button explicitly. Turbo disables (and re-enables) the
+    // button named in `SubmitEvent.submitter`, which stays null when
+    // `requestSubmit()` is called bare, so the button would never disable.
+    form?.requestSubmit(form.querySelector('button[type="submit"]'))
   }
 }
