@@ -1,8 +1,9 @@
-<%# locals: (message:, url:) %>
+<%# locals: (message:, url:, chat: nil) %>
 <%# Shared composer. `contents` lets the error message and the card sit directly
     in the surrounding flex column, so it stays pinned below the message list on
     a chat page and centred on the new chat page. %>
-<%= form_with(model: message, url: url, id: "new_message", class: "contents") do |form| %>
+<%= form_with(model: message, url: url, id: "new_message", class: "contents",
+    data: { controller: "composer" }) do |form| %>
   <% if message.errors.any? %>
     <div id="error_explanation" class="bg-base-100">
       <div class="mx-auto w-full max-w-3xl px-4 pt-2 text-sm text-error">
@@ -19,18 +20,11 @@
       <div class="rounded-2xl border border-base-300 p-2 shadow-sm transition
                   focus-within:border-primary focus-within:shadow-lg focus-within:shadow-primary/25">
         <%= form.text_area :content, rows: 2, placeholder: "Message...", autofocus: true,
-            data: { controller: "composer", action: "input->composer#resize keydown->composer#submit" },
+            data: { composer_target: "textarea", action: "input->composer#resize keydown->composer#submit" },
             class: "max-h-48 w-full resize-none border-0 bg-transparent px-2 py-1 leading-relaxed focus:outline-none focus:ring-0" %>
 
         <%# Actions share a row so further buttons can be added alongside send. %>
-        <div class="flex items-center justify-end gap-2 px-1 pt-1">
-          <%= form.button type: :submit, aria: { label: "Send message" },
-              class: "btn btn-circle btn-primary btn-sm" do %>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19.5V4.5m0 0-7.5 7.5M12 4.5l7.5 7.5" />
-            </svg>
-          <% end %>
-        </div>
+        <%= render "messages/composer_actions", chat: chat %>
       </div>
     </div>
   </div>

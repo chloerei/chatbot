@@ -1,0 +1,25 @@
+<%# locals: (chat: nil) %>
+<%# The composer's action slot. It has its own id and partial so the response job
+    can put the send button back once a run ends — the browser has no other way
+    to know. While the chat is responding the send button gives way to a stop
+    button, which cancels that chat; there is no chat on the new-chat page, so it
+    stays a send button there. The stop button overrides the form's action with
+    `formaction` rather than nesting a second form, which HTML forbids. %>
+<div id="composer_actions" class="flex items-center justify-end gap-2 px-1 pt-1">
+  <% if chat&.responding? %>
+    <button type="submit" formaction="<%= cancel_chat_path(chat) %>" formmethod="post"
+        data-composer-target="cancel" aria-label="Stop response"
+        class="btn btn-circle btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4">
+        <rect x="6" y="6" width="12" height="12" rx="2" />
+      </svg>
+    </button>
+  <% else %>
+    <button type="submit" data-composer-target="send" aria-label="Send message"
+        class="btn btn-circle btn-primary btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19.5V4.5m0 0-7.5 7.5M12 4.5l7.5 7.5" />
+      </svg>
+    </button>
+  <% end %>
+</div>

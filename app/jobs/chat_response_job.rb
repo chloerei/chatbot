@@ -37,6 +37,13 @@ class ChatResponseJob < ApplicationJob
     end
 
     flush
+  rescue RubyLLM::CancelledError
+    # The reader stopped the turn. RubyLLM's cancellation checkpoints have
+    # already raised and cleared the pending assistant message, so there is
+    # nothing left to persist.
+  ensure
+    # Idle again however the run ended; the status change redraws the composer.
+    chat.idle!
   end
 
   private

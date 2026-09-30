@@ -1,7 +1,7 @@
 class ChatsController < ApplicationController
   layout "chats"
 
-  before_action :set_chat, only: [ :show, :destroy ]
+  before_action :set_chat, only: [ :show, :destroy, :cancel ]
 
   # Feeds the drawer's :chats_list turbo frame, so it never renders the layout.
   def index
@@ -29,6 +29,7 @@ class ChatsController < ApplicationController
     if content.present?
       @chat = ChatAgent.create!(user: Current.user)
       @chat.ask_later(content)
+      @chat.responding!
       ChatResponseJob.perform_later(@chat)
       ChatTitleJob.perform_later(@chat)
 
@@ -59,6 +60,15 @@ class ChatsController < ApplicationController
 
     # Oldest first, so the newest message ends up at the bottom.
     @messages = messages.to_a.reverse
+  end
+
+  # The stop button in the composer. The request is written to the chat and
+  # RubyLLM's own polling observes it in the streaming job, which then raises and
+  # unwinds the turn; the job clears the composer when it does.
+  def cancel
+    @chat.cancel
+
+    head :no_content
   end
 
   # The Chat model broadcasts the removal to the drawer's chat list. Deleting

@@ -7,6 +7,7 @@ class MessagesController < ApplicationController
     content = params.dig(:message, :content)
     if content.present?
       @chat.ask_later(content)
+      @chat.responding!
       ChatResponseJob.perform_later(@chat)
 
       respond_to do |format|

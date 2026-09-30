@@ -73,6 +73,12 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to chat_path(chat)
   end
 
+  test "create marks the chat as responding" do
+    post chats_path, params: { message: { content: "Hello there" } }
+
+    assert Chat.order(:created_at).last.responding?
+  end
+
   test "create without a message does not start a chat" do
     assert_no_difference -> { Chat.count } do
       assert_no_enqueued_jobs only: [ ChatResponseJob, ChatTitleJob ] do
@@ -162,6 +168,15 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#message_tool_call_call_1_output", text: /file1/
     # The result is never a message of its own.
     assert_select "#message_#{result.id}", count: 0
+  end
+
+  test "cancel requests cancellation of the chat" do
+    chat = @user.chats.create!
+
+    post cancel_chat_path(chat)
+
+    assert_response :no_content
+    assert chat.reload.cancelled?
   end
 
   test "destroy from a chat page redirects to the new chat page" do

@@ -33,7 +33,7 @@
       max width. Its id is the Turbo Stream append target and the pagination anchor. %>
   <div class="min-h-0 grow flex flex-col-reverse overflow-y-auto">
     <div class="sticky bottom-0 z-10">
-      <%= render "messages/form", message: @message, url: [ @chat, @message ] %>
+      <%= render "messages/form", message: @message, url: [ @chat, @message ], chat: @chat %>
     </div>
 
     <div id="messages"

@@ -1,5 +1,9 @@
 Rails.application.routes.draw do
   resources :chats, only: [ :index, :create, :show, :destroy ] do
+    member do
+      post :cancel
+    end
+
     resources :messages, only: [ :create ]
   end
   resource :session
