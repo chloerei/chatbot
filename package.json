@@ -14,6 +14,8 @@
     "@hotwired/turbo-rails": "^8.0.23",
     "@rails/request.js": "^0.0.13",
     "@tailwindcss/cli": "^4.3.3",
+    "dompurify": "^3.4.16",
+    "marked": "^18.0.14",
     "tailwindcss": "^4.3.3"
   }
 }

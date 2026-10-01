@@ -13,7 +13,11 @@
     <%= render "messages/thinking", message: assistant, text: thinking %>
   <% end %>
 
-  <div id="message_<%= assistant.id %>_content" class="whitespace-pre-wrap wrap-break-word py-1 leading-relaxed"><%= assistant.content %></div>
+  <%# The answer is Markdown, rendered from the hidden source into the output. %>
+  <div id="message_<%= assistant.id %>_content" data-controller="markdown" class="wrap-break-word py-1 leading-relaxed">
+    <div data-markdown-target="output" class="markdown"></div>
+    <div id="message_<%= assistant.id %>_content_source" data-markdown-target="source" hidden><%= assistant.content %></div>
+  </div>
 
   <% assistant.ruby_llm_tool_calls.each do |tool_call| %>
     <%= render "messages/tool_call", tool_call: tool_call %>

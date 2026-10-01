@@ -1,4 +1,6 @@
 @import "tailwindcss" source(none);
+@import "./markdown.css";
+
 @plugin "daisyui";
 
 @source "../stylesheets";

@@ -13,6 +13,9 @@ application.register("composer", ComposerController)
 import HelloController from "./hello_controller"
 application.register("hello", HelloController)
 
+import MarkdownController from "./markdown_controller"
+application.register("markdown", MarkdownController)
+
 import PaginationController from "./pagination_controller"
 application.register("pagination", PaginationController)
 

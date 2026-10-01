@@ -20,7 +20,7 @@ class ChatResponseJobTest < ActiveJob::TestCase
     assert region, "expected the reasoning region, got #{targets(streams)}"
     assert_includes region.at("template").inner_html, "Six times seven."
 
-    content = streams.find { |s| s["action"] == "append" && s["target"] == "message_#{@assistant.id}_content" }
+    content = streams.find { |s| s["action"] == "append" && s["target"] == "message_#{@assistant.id}_content_source" }
     assert_includes content.at("template").inner_html, "Forty-two"
   end
 

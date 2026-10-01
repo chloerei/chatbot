@@ -27,9 +27,10 @@ class Message < ApplicationRecord
     "#{tool_call_dom_id(tool_call_id)}_output"
   end
 
+  # Chunks are Markdown, so they land in the hidden source, not the output.
   def broadcast_append_chunk(content)
     broadcast_append_to chat,
-      target: "message_#{id}_content",
+      target: "message_#{id}_content_source",
       content: ERB::Util.html_escape(content.to_s)
   end
 
@@ -46,7 +47,7 @@ class Message < ApplicationRecord
 
   def broadcast_append_thinking_chunk(content)
     broadcast_append_to chat,
-      target: "message_#{id}_thinking_content",
+      target: "message_#{id}_thinking_source",
       content: ERB::Util.html_escape(content.to_s)
   end
 
