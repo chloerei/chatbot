@@ -4,7 +4,7 @@
     The output region's id lives here because that is where a running tool's
     chunks are appended and where the finished result is replaced in. %>
 <details id="<%= tool_call_dom_id(tool_call) %>" class="collapse collapse-arrow">
-  <summary class="collapse-title px-0 py-1 text-sm font-medium text-base-content/60 transition-colors hover:text-base-content/80">
+  <summary class="collapse-title py-1 pl-0 pr-12 text-sm font-medium text-base-content/60 transition-colors hover:text-base-content/80">
     <span class="flex items-center gap-2">
       <%# A spinner while the call has no result yet, the wrench once it does.
           Decorative, so hidden from assistive tech; the name beside it carries
