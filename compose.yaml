@@ -1,0 +1,82 @@
+# Docker Compose development environment.
+#
+# This is the same development container as the Dev Container setup in
+# .devcontainer/, for machines and editors that cannot run Dev Containers
+# (plain Docker, Zed/Vim/Emacs, remote servers, ...). Both setups build the
+# very same image from .devcontainer/Dockerfile, so the Ruby/Node versions and
+# system packages can never drift apart.
+#
+# Quick start:
+#   docker compose up --build     # install deps, prepare db, start bin/dev
+#   docker compose exec app bash  # shell inside the running container
+#   docker compose run --rm app bin/rails test
+#   docker compose down           # stop and remove containers
+#   docker compose down -v        # also drop the bundle/node_modules volumes
+#
+# The app is served on http://localhost:3000, on the loopback interface only
+# (BINDING=0.0.0.0 is set by .devcontainer/Dockerfile, mirroring devcontainer.json
+# "forwardPorts").
+
+# Kept apart from the Dev Container project name ("chatbot") so that both
+# environments can coexist on the same machine.
+name: chatbot-dev
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+
+    # Source is bind mounted from the host - like devcontainer.json's
+    # workspaceFolder - so the Rails reloader and the esbuild/Tailwind watchers
+    # pick up host-side edits immediately.
+    volumes:
+      - .:/workspaces/chatbot:cached
+      # Gems are cached in a volume so they survive "docker compose down" and
+      # image rebuilds. Drop it with "docker compose down -v" after upgrading
+      # the Ruby version in .devcontainer/Dockerfile.
+      - bundle:/usr/local/bundle
+      # node_modules has to live in the container: esbuild ships platform
+      # specific binaries, so the host copy is unusable on Linux.
+      - node_modules:/workspaces/chatbot/node_modules
+
+    working_dir: /workspaces/chatbot
+
+    # Mirrors "forwardPorts": [3000] in devcontainer.json.
+    # Uncomment the rdbg line to attach a debugger running on the host; it also
+    # requires RUBY_DEBUG_HOST below, because rdbg binds to 127.0.0.1 by
+    # default, which is not reachable through the published port.
+    ports:
+      # Bound to the loopback address, so the dev server is only reachable from
+      # this machine and not from the local network.
+      - "127.0.0.1:3000:3000"
+      # - "127.0.0.1:12345:12345"
+
+    environment:
+      RAILS_ENV: development
+      # Procfile.dev starts the web process with RUBY_DEBUG_OPEN=true.
+      # RUBY_DEBUG_HOST: 0.0.0.0
+
+    # tmp/pids is shared with the host through the bind mount, and "rails
+    # tmp:clear" does not clean it, so a pid left behind by a host side run
+    # would stop this server from booting if the pid happens to be taken inside
+    # the container. The Dev Container template guards the same way.
+    #
+    # bin/setup is idempotent: it installs gems and npm packages, prepares the
+    # SQLite database and clears log/tmp. bin/dev then runs Procfile.dev
+    # (web + js + css) through foreman, the same command as on a bare machine.
+    command: bash -c "rm -f tmp/pids/server.pid && bin/setup --skip-server && exec bin/dev"
+
+    # foreman supervises several child processes; init reaps them and forwards
+    # signals so Ctrl+C / "docker compose down" shuts everything down cleanly.
+    init: true
+
+    # Required by the Rails console and by the rdbg prompt inside bin/dev.
+    stdin_open: true
+    tty: true
+
+volumes:
+  # Persisted so a container rebuild does not require a fresh bundle install.
+  bundle:
+  # Persisted so a container rebuild does not require a fresh npm install.
+  node_modules:
