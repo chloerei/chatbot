@@ -1,10 +1,10 @@
 # Docker Compose development environment.
 #
-# This is the same development container as the Dev Container setup in
-# .devcontainer/, for machines and editors that cannot run Dev Containers
-# (plain Docker, Zed/Vim/Emacs, remote servers, ...). Both setups build the
-# very same image from .devcontainer/Dockerfile, so the Ruby/Node versions and
-# system packages can never drift apart.
+# This file is the single definition of the development container: it is used
+# both by "docker compose up" and, through .devcontainer/devcontainer.json, by
+# Dev Containers (VS Code, JetBrains, ...). The image is built from
+# ./Dockerfile.dev, the same one the Dev Container builds, so the Ruby/Node
+# versions and system packages can never drift apart.
 #
 # Quick start:
 #   docker compose up --build     # install deps, prepare db, start bin/dev
@@ -14,18 +14,17 @@
 #   docker compose down -v        # also drop the bundle/node_modules volumes
 #
 # The app is served on http://localhost:3000, on the loopback interface only
-# (BINDING=0.0.0.0 is set by .devcontainer/Dockerfile, mirroring devcontainer.json
-# "forwardPorts").
+# (BINDING=0.0.0.0 is set by Dockerfile.dev).
 
-# Kept apart from the Dev Container project name ("chatbot") so that both
-# environments can coexist on the same machine.
+# Shared by both the Dev Container and plain docker compose, so the two always
+# work on the same containers and volumes.
 name: chatbot-dev
 
 services:
   app:
     build:
       context: .
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: Dockerfile.dev
 
     # Source is bind mounted from the host - like devcontainer.json's
     # workspaceFolder - so the Rails reloader and the esbuild/Tailwind watchers
@@ -34,7 +33,7 @@ services:
       - .:/workspaces/chatbot:cached
       # Gems are cached in a volume so they survive "docker compose down" and
       # image rebuilds. Drop it with "docker compose down -v" after upgrading
-      # the Ruby version in .devcontainer/Dockerfile.
+      # the Ruby version in Dockerfile.dev.
       - bundle:/usr/local/bundle
       # node_modules has to live in the container: esbuild ships platform
       # specific binaries, so the host copy is unusable on Linux.
@@ -60,7 +59,7 @@ services:
     # tmp/pids is shared with the host through the bind mount, and "rails
     # tmp:clear" does not clean it, so a pid left behind by a host side run
     # would stop this server from booting if the pid happens to be taken inside
-    # the container. The Dev Container template guards the same way.
+    # the container. The official Rails compose template guards the same way.
     #
     # bin/setup is idempotent: it installs gems and npm packages, prepares the
     # SQLite database and clears log/tmp. bin/dev then runs Procfile.dev

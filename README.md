@@ -25,27 +25,36 @@ Things you may want to cover:
 
 ## Development
 
+Both entry points below run the same development container: `compose.yaml` is the
+single service definition and `Dockerfile.dev` builds the image, so Ruby/Node
+versions, system packages, volumes and ports are identical either way. Inside the
+container `bin/setup --skip-server` installs gems and npm packages and prepares the
+SQLite database, and `bin/dev` runs the web, js and css processes from `Procfile.dev`
+through foreman. The Rails reloader and the esbuild/Tailwind watchers work against
+the mounted source, so edits on the host take effect immediately.
+
 ### Dev Containers
 
 Open the project in an editor that supports [Dev Containers](https://containers.dev/)
-(VS Code, JetBrains, ...). `.devcontainer/` builds the image, mounts the source at
-`/workspaces/chatbot` and forwards port 3000. Run `bin/setup --skip-server` once
-inside the container, then `bin/dev`.
+(VS Code, JetBrains, ...). `.devcontainer/devcontainer.json` inherits the root
+`compose.yaml`, mounts the source at `/workspaces/chatbot` and forwards port 3000.
+
+The container itself only idles (`overrideCommand`), so the app is started by hand:
+run `bin/setup --skip-server` the first time, then `bin/dev`, and it is served on
+http://localhost:3000. Restarting the server is then just re-running `bin/dev`, while
+the container and its volumes stay put.
 
 ### Docker Compose
 
-For machines and editors without Dev Container support, `compose.yaml` builds the
-same image from `.devcontainer/Dockerfile`, mounts the source the same way and
-publishes port 3000 on the loopback interface only:
+For machines and editors without Dev Container support, start the same environment
+directly. Port 3000 is published on the loopback interface only:
 
 ```sh
 docker compose up --build
 ```
 
-This runs `bin/setup --skip-server` (gems, npm packages, SQLite database) and then
-`bin/dev`, so http://localhost:3000 is ready once foreman has started. The Rails
-reloader and the esbuild/Tailwind watchers run inside the container against the
-mounted source, so edits on the host take effect immediately.
+Unlike the Dev Container, this runs `bin/setup --skip-server` and `bin/dev` for you,
+so http://localhost:3000 is ready once foreman has started.
 
 ```sh
 docker compose exec app bash          # shell inside the container
@@ -66,7 +75,7 @@ Notes:
   to live in a volume because esbuild ships platform specific binaries and the host
   copy cannot be used by the Linux container. Drop both volumes with
   `docker compose down -v` if dependencies ever look out of sync, for example after
-  a Ruby version bump in `.devcontainer/Dockerfile`.
+  a Ruby version bump in `Dockerfile.dev`.
 * On Linux hosts the container runs as `root` (as in the Dev Container), so files it
   creates in the mounted source (`log/`, `tmp/`, `storage/*.sqlite3`,
   `app/assets/builds/`) are owned by root; fix with
@@ -79,5 +88,6 @@ Notes:
   to `config/environments/development.rb` if you want to use it.
 * Remote debugging: `Procfile.dev` opens rdbg on port 12345. Uncomment the rdbg port
   and `RUBY_DEBUG_HOST` in `compose.yaml` to attach a debugger from the host.
-* The compose project is named `chatbot-dev`, so it does not clash with a Dev
-  Container started from the same checkout.
+* Dev Containers and `docker compose` share the `chatbot-dev` compose project, so
+  they use the same containers and volumes; switching between the two recreates the
+  container (the commands differ) but keeps gems, `node_modules` and the database.
