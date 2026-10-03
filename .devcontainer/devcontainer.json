@@ -2,24 +2,34 @@
 // For config options, see the README at: https://github.com/devcontainers/templates/tree/main/src/ruby
 {
   "name": "chatbot",
-  "dockerComposeFile": "compose.yaml",
+
+  // The dev container inherits the root compose.yaml, so "docker compose up"
+  // and Dev Containers run the exact same service, image (Dockerfile.dev) and
+  // volumes. The path is relative to this file.
+  "dockerComposeFile": "../compose.yaml",
   "service": "app",
   "workspaceFolder": "/workspaces/chatbot",
+
+  // Let the CLI replace the compose command with an idle one, so the container
+  // only stays alive and the app is started by hand: "bin/setup --skip-server"
+  // the first time, then "bin/dev". Restarting the server is then just
+  // re-running "bin/dev" - the container and its volumes stay put.
+  "overrideCommand": true,
 
   // Features to add to the dev container. More info: https://containers.dev/features.
   // "features": {
   // },
 
-  // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  "forwardPorts": [3000],
+  // The compose service already publishes 3000 on the host loopback; forwarding
+  // keeps the app reachable when Docker runs on a remote host (SSH, Codespaces).
+  "forwardPorts": [3000]
 
   // Configure tool-specific properties.
   // "customizations": {},
 
-  // Uncomment to connect as root instead. More info: https://containers.dev/implementors/json_reference/#remoteUser.
-  // "remoteUser": "root",
+  // The image has no unprivileged user, so the container (and this connection)
+  // runs as root. Add a user to Dockerfile.dev and set "remoteUser" to use one.
+  // "remoteUser": "root"
 
-
-  // Use 'postCreateCommand' to run commands after the container is created.
-  // "postCreateCommand": "bin/setup --skip-server"
+  // No "postCreateCommand" is needed: bin/setup is run by hand (see above).
 }
