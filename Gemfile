@@ -41,7 +41,7 @@ gem "thruster", require: false
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
 gem "image_processing", "~> 1.2"
 
-gem "ruby_llm", "~> 2.0.0"
+gem "ruby_llm", "~> 2.1.1"
 
 # Paginate the messages loaded into a chat as the reader scrolls back
 # through the conversation [https://github.com/ddnexus/pagy]
